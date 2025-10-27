@@ -1,0 +1,45 @@
+package com.firefly.demo
+
+import org::springframework::web::bind::annotation::RestController
+import org::springframework::web::bind::annotation::RequestMapping
+import org::springframework::web::bind::annotation::GetMapping
+import org::springframework::web::bind::annotation::PostMapping
+import org::springframework::web::bind::annotation::RequestBody
+import org::springframework::stereotype::Service
+import org::springframework::stereotype::Component
+
+// REST Controller
+@RestController
+@RequestMapping("/api")
+class HelloController {
+    @GetMapping("/hello")
+    fn hello() -> String {
+        "Hello from Firefly + Spring Boot!"
+    }
+    
+    @GetMapping("/status")
+    fn status() -> String {
+        "Status: Running on Firefly"
+    }
+    
+    @PostMapping("/echo")
+    fn echo(@RequestBody message: String) -> String {
+        "Echo from Firefly"
+    }
+}
+
+// Service
+@Service
+class MessageService {
+    fn process() -> String {
+        "Processed by Firefly"
+    }
+}
+
+// Component
+@Component
+class AppComponent {
+    fn initialize() -> String {
+        "Firefly Component Initialized"
+    }
+}
