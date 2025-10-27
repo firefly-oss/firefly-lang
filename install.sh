@@ -106,7 +106,7 @@ Examples:
   bash install.sh --prefix "${HOME}/.local"
 
   # Install a specific tag
-  bash install.sh --branch v0.1.0
+  bash install.sh --branch v0.4.0
 EOF
 }
 

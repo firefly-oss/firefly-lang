@@ -307,7 +307,7 @@ Add Firefly compilation to your Maven project:
         <plugin>
             <groupId>com.firefly</groupId>
             <artifactId>firefly-maven-plugin</artifactId>
-            <version>0.1.0-SNAPSHOT</version>
+            <version>0.4.0</version>
             <executions>
                 <execution>
                     <phase>process-classes</phase>

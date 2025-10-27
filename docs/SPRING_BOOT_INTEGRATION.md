@@ -120,7 +120,7 @@ private void emitAnnotationValues(AnnotationVisitor av, Annotation ann) {
 <plugin>
     <groupId>com.firefly</groupId>
     <artifactId>firefly-maven-plugin</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+            <version>0.4.0</version>
     <executions>
         <execution>
             <phase>process-classes</phase>
