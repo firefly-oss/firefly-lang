@@ -8,7 +8,7 @@ Professional documentation structure has been established for the Firefly Progra
 
 ## 📚 Core Documentation
 
-### 1. [README.md](README.md)
+### 1. [README.md](../README.md)
 **Main project landing page**
 
 - Quick start guide
@@ -18,7 +18,7 @@ Professional documentation structure has been established for the Firefly Progra
 - Roadmap
 - Community links
 
-### 2. [GUIDE.md](GUIDE.md)
+### 2. [GUIDE.md](../GUIDE.md)
 **Complete Language Reference (739 lines)**
 
 Comprehensive guide covering:
@@ -33,7 +33,7 @@ Comprehensive guide covering:
 - Best practices
 - Tooling
 
-### 3. [SYNTAX.md](SYNTAX.md)
+### 3. [SYNTAX.md](../SYNTAX.md)
 **Quick Syntax Reference**
 
 Fast lookup for:
@@ -129,7 +129,13 @@ firefly-lang/
 ├── README.md                      # Main entry point
 ├── GUIDE.md                       # Complete reference
 ├── SYNTAX.md                      # Quick lookup
-├── SPRING_BOOT_INTEGRATION.md     # Technical details
+├── STATUS.md                      # Implementation status
+├── CONTRIBUTING.md                # Contribution guidelines
+├── docs/                          # Technical documentation
+│   ├── SPRING_BOOT_INTEGRATION.md
+│   ├── DOCUMENTATION_SUMMARY.md
+│   ├── GIT_SETUP.md
+│   └── ...
 ├── examples/                      # Code examples
 ├── firefly-compiler/             # Compiler implementation
 ├── firefly-maven-plugin/         # Maven integration

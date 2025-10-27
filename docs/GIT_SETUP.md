@@ -66,8 +66,13 @@ firefly-lang/
 ├── README.md                      # Main documentation
 ├── GUIDE.md                       # Language guide
 ├── SYNTAX.md                      # Syntax reference
-├── SPRING_BOOT_INTEGRATION.md     # Technical documentation
-├── DOCUMENTATION_SUMMARY.md       # Documentation overview
+├── STATUS.md                      # Implementation status
+├── CONTRIBUTING.md                # Contribution guidelines
+├── docs/                          # Technical documentation
+│   ├── SPRING_BOOT_INTEGRATION.md
+│   ├── DOCUMENTATION_SUMMARY.md
+│   ├── GIT_SETUP.md
+│   └── ...
 ├── pom.xml                        # Maven parent POM
 ├── examples/                      # Code examples
 │   ├── hello-world/

@@ -205,6 +205,6 @@ For production use, you'll need to:
 
 ## See Also
 
-- [Spring Boot Integration Guide](../../SPRING_BOOT_INTEGRATION.md) - Technical details
+- [Spring Boot Integration Guide](../../docs/SPRING_BOOT_INTEGRATION.md) - Technical details
 - [Full Language Guide](../../GUIDE.md) - Complete Firefly reference
 - [Implementation Status](../../STATUS.md) - Current feature status

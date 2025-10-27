@@ -203,14 +203,14 @@ fn processData(items: List<String>) -> List<String> {
 
 ### Integration Guides
 
-- **[Spring Boot Integration](SPRING_BOOT_INTEGRATION.md)** - Technical deep dive
+- **[Spring Boot Integration](docs/SPRING_BOOT_INTEGRATION.md)** - Technical deep dive
   - Architecture and design
   - Classloader integration
   - Method resolution
   - Maven plugin usage
   - Testing procedures
 
-- **[Git Setup](GIT_SETUP.md)** - Version control configuration
+- **[Git Setup](docs/GIT_SETUP.md)** - Version control configuration
   - Repository setup
   - Branch strategy
   - CI/CD integration
@@ -230,7 +230,7 @@ fn processData(items: List<String>) -> List<String> {
 
 ### Project Information
 
-- **[Documentation Summary](DOCUMENTATION_SUMMARY.md)** - Documentation overview
+- **[Documentation Summary](docs/DOCUMENTATION_SUMMARY.md)** - Documentation overview
 - **[Contributing Guide](CONTRIBUTING.md)** - How to contribute
 
 ## 🏗️ Project Structure

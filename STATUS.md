@@ -341,7 +341,7 @@ Firefly is actively developed and welcomes contributions! See [CONTRIBUTING.md](
 - [README.md](README.md) - Quick start and overview
 - [GUIDE.md](GUIDE.md) - Complete language guide
 - [SYNTAX.md](SYNTAX.md) - Quick syntax reference
-- [SPRING_BOOT_INTEGRATION.md](SPRING_BOOT_INTEGRATION.md) - Technical deep dive
+- [Spring Boot Integration](docs/SPRING_BOOT_INTEGRATION.md) - Technical deep dive
 - [examples/](examples/) - Working code examples
 
 ---
