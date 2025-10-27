@@ -223,11 +223,6 @@ fn processData(items: List<String>) -> List<String> {
   - [Spring Boot Demo](examples/spring-boot/) - Complete REST API
   - [More examples...](examples/)
 
-- **[Spring Boot Demo App](spring-boot-demo/)** - Full production example
-  - Complete microservice
-  - Automated testing
-  - Build and deployment
-
 ### Project Information
 
 - **[Documentation Summary](docs/DOCUMENTATION_SUMMARY.md)** - Documentation overview
@@ -244,11 +239,10 @@ firefly-lang/
 │   └── codegen            # JVM bytecode generation
 ├── firefly-maven-plugin/  # Maven integration
 ├── firefly-runtime/       # Runtime library
-├── examples/              # Code examples
-│   ├── hello-world/
-│   ├── spring-boot/
-│   └── basic-syntax/
-└── spring-boot-demo/      # Full Spring Boot demo app
+└── examples/              # Code examples
+    ├── hello-world/
+    ├── basic-syntax/
+    └── spring-boot/
 ```
 
 ## 🎓 Examples
@@ -335,14 +329,6 @@ Run the test suite:
 
 ```bash
 mvn clean test
-```
-
-Run Spring Boot demo:
-
-```bash
-cd spring-boot-demo
-mvn clean package
-./test-app.sh
 ```
 
 ## 🗺️ Roadmap

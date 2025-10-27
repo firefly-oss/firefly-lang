@@ -337,7 +337,7 @@ class HelloController {
 cd firefly-lang
 mvn clean install -DskipTests
 
-cd spring-boot-demo
+cd examples/spring-boot
 mvn clean package
 ```
 

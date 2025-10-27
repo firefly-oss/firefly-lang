@@ -82,9 +82,7 @@ firefly-lang/
 ├── firefly-maven-plugin/         # Maven plugin
 ├── firefly-runtime/              # Runtime library
 ├── firefly-stdlib/               # Standard library
-├── firefly-cli/                  # CLI tools
-├── firefly-spring-boot-starter/  # Spring Boot starter
-└── spring-boot-demo/             # Demo application
+└── firefly-cli/                  # CLI tools
 ```
 
 ---

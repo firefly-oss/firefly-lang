@@ -140,8 +140,7 @@ firefly-lang/
 ├── firefly-compiler/             # Compiler implementation
 ├── firefly-maven-plugin/         # Maven integration
 ├── firefly-runtime/              # Runtime library
-├── firefly-stdlib/               # Standard library
-└── spring-boot-demo/             # Full demo app
+└── firefly-stdlib/               # Standard library
 ```
 
 ### Clean Structure
