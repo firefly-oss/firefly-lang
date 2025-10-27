@@ -1,0 +1,196 @@
+{
+  "name": "Firefly",
+  "scopeName": "source.firefly",
+  "fileTypes": ["fly"],
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#keywords" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#functions" },
+    { "include": "#types" },
+    { "include": "#operators" },
+    { "include": "#punctuation" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.firefly",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.firefly",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.firefly",
+          "match": "\\b(if|else|match|for|while|in|return|break|continue)\\b"
+        },
+        {
+          "name": "keyword.declaration.firefly",
+          "match": "\\b(fn|let|mut|struct|data|trait|impl|type|protocol|extend|context|supervisor|flow|stage|macro)\\b"
+        },
+        {
+          "name": "keyword.modifier.firefly",
+          "match": "\\b(async|pub|priv|using|with|requires|when)\\b"
+        },
+        {
+          "name": "keyword.concurrency.firefly",
+          "match": "\\b(concurrent|race|timeout|await)\\b"
+        },
+        {
+          "name": "keyword.other.firefly",
+          "match": "\\b(package|import|self|none)\\b"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.firefly",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.firefly",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.firefly",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.firefly",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.hex.firefly",
+          "match": "\\b0x[0-9a-fA-F]+\\b"
+        },
+        {
+          "name": "constant.numeric.binary.firefly",
+          "match": "\\b0b[01]+\\b"
+        },
+        {
+          "name": "constant.numeric.octal.firefly",
+          "match": "\\b0o[0-7]+\\b"
+        },
+        {
+          "name": "constant.numeric.float.firefly",
+          "match": "\\b[0-9]+\\.[0-9]+([eE][+-]?[0-9]+)?\\b"
+        },
+        {
+          "name": "constant.numeric.integer.firefly",
+          "match": "\\b[0-9]+(_[0-9]+)*\\b"
+        },
+        {
+          "name": "constant.language.boolean.firefly",
+          "match": "\\b(true|false)\\b"
+        }
+      ]
+    },
+    "functions": {
+      "patterns": [
+        {
+          "name": "entity.name.function.firefly",
+          "match": "\\b(fn)\\s+([a-z_][a-zA-Z0-9_]*)\\b",
+          "captures": {
+            "1": { "name": "keyword.declaration.firefly" },
+            "2": { "name": "entity.name.function.firefly" }
+          }
+        },
+        {
+          "name": "support.function.builtin.firefly",
+          "match": "\\b(println|print|panic|assert)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "entity.name.type.firefly",
+          "match": "\\b[A-Z][a-zA-Z0-9_]*\\b"
+        },
+        {
+          "name": "support.type.primitive.firefly",
+          "match": "\\b(Int|String|Bool|Float|Unit)\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.arrow.firefly",
+          "match": "(->|=>)"
+        },
+        {
+          "name": "keyword.operator.null-coalescing.firefly",
+          "match": "(\\?\\?|\\?\\.|\\?:|!!)"
+        },
+        {
+          "name": "keyword.operator.range.firefly",
+          "match": "(\\.\\.|\\.\\.=)"
+        },
+        {
+          "name": "keyword.operator.logical.firefly",
+          "match": "(&&|\\|\\||!)"
+        },
+        {
+          "name": "keyword.operator.comparison.firefly",
+          "match": "(==|!=|<=|>=|<|>)"
+        },
+        {
+          "name": "keyword.operator.arithmetic.firefly",
+          "match": "(\\+|-|\\*|/|%)"
+        },
+        {
+          "name": "keyword.operator.reference.firefly",
+          "match": "(&|\\*)"
+        },
+        {
+          "name": "keyword.operator.assignment.firefly",
+          "match": "="
+        },
+        {
+          "name": "keyword.operator.message.firefly",
+          "match": ">>"
+        },
+        {
+          "name": "keyword.operator.scope.firefly",
+          "match": "::"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.terminator.firefly",
+          "match": ";"
+        },
+        {
+          "name": "punctuation.separator.firefly",
+          "match": ","
+        },
+        {
+          "name": "punctuation.accessor.firefly",
+          "match": "\\."
+        }
+      ]
+    }
+  }
+}

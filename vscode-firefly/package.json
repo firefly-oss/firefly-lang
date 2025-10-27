@@ -1,0 +1,79 @@
+{
+  "name": "firefly-language",
+  "displayName": "Firefly Language Support",
+  "description": "Language support for Firefly programming language (.fly files)",
+  "version": "0.1.0",
+  "publisher": "firefly-lang",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "firefly",
+    "fly",
+    "concurrent",
+    "functional",
+    "jvm"
+  ],
+  "icon": "images/firefly-icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/firefly-lang/firefly-lang"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "firefly",
+        "aliases": [
+          "Firefly",
+          "firefly"
+        ],
+        "extensions": [
+          ".fly"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./images/file-icon.svg",
+          "dark": "./images/file-icon.svg"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "firefly",
+        "scopeName": "source.firefly",
+        "path": "./syntaxes/firefly.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "firefly",
+        "path": "./snippets/firefly.json"
+      }
+    ],
+    "themes": [
+      {
+        "label": "Firefly Dark",
+        "uiTheme": "vs-dark",
+        "path": "./themes/firefly-dark.json"
+      }
+    ]
+  },
+  "activationEvents": [
+    "onLanguage:firefly"
+  ],
+  "main": "./out/extension.js",
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.75.0",
+    "typescript": "^5.0.0"
+  }
+}
