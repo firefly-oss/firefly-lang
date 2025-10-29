@@ -14,34 +14,36 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 public class AstBuilderTest {
     
-    private CompilationUnit parse(String source) {
+private CompilationUnit parse(String source) {
         FireflyLexer lexer = new FireflyLexer(CharStreams.fromString(source));
         CommonTokenStream tokens = new CommonTokenStream(lexer);
         FireflyParser parser = new FireflyParser(tokens);
-        
         AstBuilder builder = new AstBuilder("test.fly");
         return (CompilationUnit) builder.visit(parser.compilationUnit());
+    }
+
+private String header(String module) {
+        return "module " + module + "\n\n";
+    }
+    
+    private String wrapInClass(String body) {
+        return "class Test {\n" + body + "\n}\n";
     }
     
     @Test
     public void testSimpleLiteral() {
-        String source = "fn main() { 42 }";
+String source = header("tests::ast") + wrapInClass("  pub fn main() -> Int { 42 }\n");
         CompilationUnit unit = parse(source);
         
         assertNotNull(unit);
-        assertFalse(unit.getPackageName().isPresent());
-        assertTrue(unit.getImports().isEmpty());
+assertNotNull(unit.getModuleName());
+assertTrue(unit.getUses().isEmpty());
         // TODO: Validate function declaration once we implement it
     }
     
     @Test
     public void testBinaryExpression() {
-        String source = """
-            fn calculate() {
-                let x = 10 + 20;
-                let y = x * 2;
-            }
-            """;
+String source = header("tests::ast") + wrapInClass("  pub fn calculate() -> Void {\n    let x = 10 + 20;\n    let y = x * 2;\n  }\n");
         
         CompilationUnit unit = parse(source);
         assertNotNull(unit);
@@ -49,15 +51,7 @@ public class AstBuilderTest {
     
     @Test
     public void testIfExpression() {
-        String source = """
-            fn check(x: Int) {
-                if x > 10 {
-                    println("big");
-                } else {
-                    println("small");
-                }
-            }
-            """;
+String source = header("tests::ast") + wrapInClass("  pub fn check(x: Int) -> Void {\n    if x > 10 {\n      println(\"big\");\n    } else {\n      println(\"small\");\n    }\n  }\n");
         
         CompilationUnit unit = parse(source);
         assertNotNull(unit);
@@ -65,13 +59,7 @@ public class AstBuilderTest {
     
     @Test
     public void testForLoop() {
-        String source = """
-            fn iterate() {
-                for item in items {
-                    println(item);
-                }
-            }
-            """;
+String source = header("tests::ast") + wrapInClass("  pub fn iterate() -> Void {\n    for item in items {\n      println(item);\n    }\n  }\n");
         
         CompilationUnit unit = parse(source);
         assertNotNull(unit);
@@ -79,44 +67,29 @@ public class AstBuilderTest {
     
     @Test
     public void testImportDeclaration() {
-        String source = """
-            import std::io
-            import std::collections::{list, map}
-            
-            fn main() {
-                println("Hello");
-            }
-            """;
+String source = "module tests::ast\n\n" +
+                "use std::io\n" +
+                "use std::collections::{list, map}\n\n" +
+wrapInClass("  pub fn main() -> Void {\n    println(\"Hello\");\n  }\n");
         
         CompilationUnit unit = parse(source);
         assertNotNull(unit);
-        assertEquals(2, unit.getImports().size());
-        assertEquals("std.io", unit.getImports().get(0).getModulePath());
+assertEquals(2, unit.getUses().size());
+assertEquals("std.io", unit.getUses().get(0).getModulePath());
     }
     
     @Test
     public void testPackageDeclaration() {
-        String source = """
-            package com.example.app
-            
-            fn main() {}
-            """;
-        
+String source = "module com::example::app\n\n" + wrapInClass("  pub fn main() -> Void {}\n");
+
         CompilationUnit unit = parse(source);
         assertNotNull(unit);
-        assertTrue(unit.getPackageName().isPresent());
-        assertEquals("com.example.app", unit.getPackageName().get());
+assertEquals("com.example.app", unit.getModuleName());
     }
     
     @Test
     public void testComplexExpression() {
-        String source = """
-            fn complex() {
-                let result = (10 + 20) * 3 - 5 / 2;
-                let name = user?.name ?? "Unknown";
-                let items = array[index];
-            }
-            """;
+String source = header("tests::ast") + wrapInClass("  pub fn complex() -> Void {\n    let result = (10 + 20) * 3 - 5 / 2;\n    let name = user?.name ?? \"Unknown\";\n    let items = array[index];\n  }\n");
         
         CompilationUnit unit = parse(source);
         assertNotNull(unit);
@@ -124,12 +97,7 @@ public class AstBuilderTest {
     
     @Test
     public void testCoalesceExpression() {
-        String source = """
-            fn getNameOrDefault(user: User?) {
-                let name = user?.name ?? "Unknown";
-                name
-            }
-            """;
+String source = header("tests::ast") + wrapInClass("  pub fn getNameOrDefault(user: User?) -> String {\n    let name = user?.name ?? \"Unknown\";\n    name\n  }\n");
         
         CompilationUnit unit = parse(source);
         assertNotNull(unit);
@@ -137,15 +105,7 @@ public class AstBuilderTest {
     
     @Test
     public void testConcurrentExpression() {
-        String source = """
-            async fn fetchData() {
-                concurrent {
-                    let user = fetchUser().await,
-                    let posts = fetchPosts().await,
-                    let comments = fetchComments().await
-                }
-            }
-            """;
+String source = header("tests::ast") + wrapInClass("  pub async fn fetchData() -> Void {\n    concurrent {\n      let user = fetchUser().await,\n      let posts = fetchPosts().await,\n      let comments = fetchComments().await\n    }\n  }\n");
         
         CompilationUnit unit = parse(source);
         assertNotNull(unit);
@@ -153,15 +113,7 @@ public class AstBuilderTest {
     
     @Test
     public void testRaceExpression() {
-        String source = """
-            async fn fastestResponse() {
-                race {
-                    fetchFromServer1().await;
-                    fetchFromServer2().await;
-                    fetchFromCache().await
-                }
-            }
-            """;
+String source = header("tests::ast") + wrapInClass("  pub async fn fastestResponse() -> Void {\n    race {\n      fetchFromServer1().await;\n      fetchFromServer2().await;\n      fetchFromCache().await\n    }\n  }\n");
         
         CompilationUnit unit = parse(source);
         assertNotNull(unit);
@@ -169,13 +121,7 @@ public class AstBuilderTest {
     
     @Test
     public void testTimeoutExpression() {
-        String source = """
-            async fn fetchWithTimeout() {
-                timeout(5000) {
-                    fetchData().await
-                }
-            }
-            """;
+String source = header("tests::ast") + wrapInClass("  pub async fn fetchWithTimeout() -> Void {\n    timeout(5000) {\n      fetchData().await\n    }\n  }\n");
         
         CompilationUnit unit = parse(source);
         assertNotNull(unit);
@@ -183,20 +129,7 @@ public class AstBuilderTest {
     
     @Test
     public void testCombinedConcurrencyFeatures() {
-        String source = """
-            async fn complexAsync() {
-                let result = timeout(10000) {
-                    race {
-                        concurrent {
-                            let a = fetch1().await,
-                            let b = fetch2().await
-                        };
-                        fallbackValue()
-                    }
-                };
-                result ?? defaultValue()
-            }
-            """;
+String source = header("tests::ast") + wrapInClass("  pub async fn complexAsync() -> Void {\n    let result = timeout(10000) {\n      race {\n        concurrent {\n          let a = fetch1().await,\n          let b = fetch2().await\n        };\n        fallbackValue()\n      }\n    };\n    result ?? defaultValue()\n  }\n");
         
         CompilationUnit unit = parse(source);
         assertNotNull(unit);
