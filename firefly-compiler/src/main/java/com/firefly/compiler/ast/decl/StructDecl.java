@@ -3,21 +3,25 @@ package com.firefly.compiler.ast.decl;
 import com.firefly.compiler.ast.*;
 import com.firefly.compiler.ast.expr.Expression;
 import com.firefly.compiler.ast.type.Type;
+import com.firefly.compiler.ast.type.TypeParameter;
 import java.util.List;
 import java.util.Optional;
 
 /**
  * Represents a struct declaration (product type) in the AST.
  * Grammar: 'struct' TYPE_IDENTIFIER typeParameters? '{' structField* '}'
+ *
+ * Supports generic structs with type parameters and bounds.
+ * Example: struct Point<T: Numeric> { x: T, y: T }
  */
 public class StructDecl extends Declaration {
     private final String name;
-    private final List<String> typeParameters;
+    private final List<TypeParameter> typeParameters;
     private final List<Field> fields;
-    
+
     public StructDecl(
         String name,
-        List<String> typeParameters,
+        List<TypeParameter> typeParameters,
         List<Field> fields,
         SourceLocation location
     ) {
@@ -26,9 +30,9 @@ public class StructDecl extends Declaration {
         this.typeParameters = typeParameters;
         this.fields = fields;
     }
-    
+
     public String getName() { return name; }
-    public List<String> getTypeParameters() { return typeParameters; }
+    public List<TypeParameter> getTypeParameters() { return typeParameters; }
     public List<Field> getFields() { return fields; }
     
     @Override

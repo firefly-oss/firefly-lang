@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.firefly</groupId>
+        <artifactId>firefly-lang</artifactId>
+        <version>1.0-Alpha</version>
+    </parent>
+
+    <artifactId>firefly-repl</artifactId>
+    <name>Firefly REPL</name>
+    <description>Interactive Read-Eval-Print Loop for Firefly programming language</description>
+
+    <dependencies>
+        <!-- Firefly Compiler -->
+        <dependency>
+            <groupId>com.firefly</groupId>
+            <artifactId>firefly-compiler</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Firefly Runtime -->
+        <dependency>
+            <groupId>com.firefly</groupId>
+            <artifactId>firefly-runtime</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Firefly Standard Library -->
+        <dependency>
+            <groupId>com.firefly</groupId>
+            <artifactId>firefly-stdlib</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- JLine for advanced terminal features -->
+        <dependency>
+            <groupId>org.jline</groupId>
+            <artifactId>jline</artifactId>
+            <version>3.25.0</version>
+        </dependency>
+
+        <!-- Testing -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Maven Compiler Plugin -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.11.0</version>
+                <configuration>
+                    <source>21</source>
+                    <target>21</target>
+                </configuration>
+            </plugin>
+
+            <!-- Maven JAR Plugin to create executable JAR -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.3.0</version>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <mainClass>com.firefly.repl.FireflyRepl</mainClass>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
+
+            <!-- Maven Shade Plugin to create fat JAR with dependencies -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.1</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>com.firefly.repl.FireflyRepl</mainClass>
+                                </transformer>
+                            </transformers>
+                            <finalName>firefly-repl</finalName>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+

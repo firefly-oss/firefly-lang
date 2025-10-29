@@ -3,12 +3,17 @@ package com.firefly.compiler.ast.decl;
 import com.firefly.compiler.ast.*;
 import com.firefly.compiler.ast.expr.Expression;
 import com.firefly.compiler.ast.type.Type;
+import com.firefly.compiler.ast.type.TypeParameter;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Represents a function declaration in the AST.
  * Grammar: 'async'? 'fn' IDENTIFIER typeParameters? '(' parameterList? ')' ('->' type)? '=' expression
+ *
+ * Supports generic functions with type parameters and trait bounds.
+ * Example: fn map<T, U: Display>(list: List<T>, f: T -> U) -> List<U>
  */
 public class FunctionDecl extends Declaration {
     private final String name;
@@ -16,7 +21,7 @@ public class FunctionDecl extends Declaration {
     private final Optional<Type> returnType;
     private final Expression body;
     private final boolean isAsync;
-    private final List<String> typeParameters;
+    private final List<TypeParameter> typeParameters;
     private final List<Annotation> annotations;
     
     public FunctionDecl(
@@ -25,19 +30,7 @@ public class FunctionDecl extends Declaration {
         Optional<Type> returnType,
         Expression body,
         boolean isAsync,
-        List<String> typeParameters,
-        SourceLocation location
-    ) {
-        this(name, parameters, returnType, body, isAsync, typeParameters, List.of(), location);
-    }
-    
-    public FunctionDecl(
-        String name,
-        List<Parameter> parameters,
-        Optional<Type> returnType,
-        Expression body,
-        boolean isAsync,
-        List<String> typeParameters,
+        List<TypeParameter> typeParameters,
         List<Annotation> annotations,
         SourceLocation location
     ) {
@@ -50,13 +43,13 @@ public class FunctionDecl extends Declaration {
         this.typeParameters = typeParameters;
         this.annotations = annotations;
     }
-    
+
     public String getName() { return name; }
     public List<Parameter> getParameters() { return parameters; }
     public Optional<Type> getReturnType() { return returnType; }
     public Expression getBody() { return body; }
     public boolean isAsync() { return isAsync; }
-    public List<String> getTypeParameters() { return typeParameters; }
+    public List<TypeParameter> getTypeParameters() { return typeParameters; }
     public List<Annotation> getAnnotations() { return annotations; }
     
     @Override
@@ -72,24 +65,31 @@ public class FunctionDecl extends Declaration {
         private final Type type;
         private final Optional<Expression> defaultValue;
         private final boolean isMutable;
+        private final boolean isVararg;
         private final List<Annotation> annotations;
-        
+
         public Parameter(String name, Type type, Optional<Expression> defaultValue, boolean isMutable) {
-            this(name, type, defaultValue, isMutable, List.of());
+            this(name, type, defaultValue, isMutable, false, List.of());
         }
-        
+
         public Parameter(String name, Type type, Optional<Expression> defaultValue, boolean isMutable, List<Annotation> annotations) {
+            this(name, type, defaultValue, isMutable, false, annotations);
+        }
+
+        public Parameter(String name, Type type, Optional<Expression> defaultValue, boolean isMutable, boolean isVararg, List<Annotation> annotations) {
             this.name = name;
             this.type = type;
             this.defaultValue = defaultValue;
             this.isMutable = isMutable;
+            this.isVararg = isVararg;
             this.annotations = annotations;
         }
-        
+
         public String getName() { return name; }
         public Type getType() { return type; }
         public Optional<Expression> getDefaultValue() { return defaultValue; }
         public boolean isMutable() { return isMutable; }
+        public boolean isVararg() { return isVararg; }
         public List<Annotation> getAnnotations() { return annotations; }
     }
 }

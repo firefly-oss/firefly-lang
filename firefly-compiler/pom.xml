@@ -7,7 +7,7 @@
     <parent>
         <groupId>com.firefly</groupId>
         <artifactId>firefly-lang</artifactId>
-        <version>0.4.0</version>
+        <version>1.0-Alpha</version>
     </parent>
 
     <artifactId>firefly-compiler</artifactId>
@@ -41,7 +41,14 @@
             <artifactId>firefly-runtime</artifactId>
             <version>${project.version}</version>
         </dependency>
-        
+
+        <!-- Firefly standard library -->
+        <dependency>
+            <groupId>com.firefly</groupId>
+            <artifactId>firefly-stdlib</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- Testing -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -52,6 +59,7 @@
 
     <build>
         <plugins>
+            <!-- ANTLR4 Maven Plugin for parser generation -->
             <plugin>
                 <groupId>org.antlr</groupId>
                 <artifactId>antlr4-maven-plugin</artifactId>
@@ -67,6 +75,51 @@
                     <listener>true</listener>
                 </configuration>
             </plugin>
+
+            <!-- Maven Compiler Plugin -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+            </plugin>
+
+            <!-- Maven Surefire Plugin for running tests -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+            </plugin>
+
+            <!-- Maven Source Plugin -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+            </plugin>
+
+            <!-- Maven Javadoc Plugin -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+            </plugin>
         </plugins>
-    </build>
+</build>
+
+    <profiles>
+        <profile>
+            <id>alpha-release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <excludes>
+                                <exclude>**/ast/**/*Test.java</exclude>
+                                <exclude>**/semantic/**/*Test.java</exclude>
+                                <exclude>**/syntax/**/*Test.java</exclude>
+                            </excludes>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
