@@ -6,11 +6,24 @@
 
     <groupId>com.firefly</groupId>
     <artifactId>firefly-lang</artifactId>
-    <version>0.4.0</version>
+    <version>1.0-Alpha</version>
     <packaging>pom</packaging>
 
-    <name>Firefly Programming Language</name>
+    <name>Flylang - Firefly Programming Language</name>
     <description>A modern functional programming language for the JVM with Elixir/Erlang-like features and Spring Boot integration</description>
+
+    <organization>
+        <name>Firefly Software Solutions Inc.</name>
+        <url>https://fireflyframework.com/flylang</url>
+    </organization>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
     <properties>
         <java.version>21</java.version>
@@ -34,6 +47,8 @@
         <module>firefly-runtime</module>
         <module>firefly-stdlib</module>
         <module>firefly-cli</module>
+        <module>firefly-repl</module>
+        <module>firefly-lsp</module>
         <module>firefly-maven-plugin</module>
     </modules>
 
@@ -85,12 +100,212 @@
     <build>
         <pluginManagement>
             <plugins>
+                <!-- Maven Compiler Plugin -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.13.0</version>
+                    <configuration>
+                        <source>${maven.compiler.source}</source>
+                        <target>${maven.compiler.target}</target>
+                        <encoding>${project.build.sourceEncoding}</encoding>
+                        <showWarnings>true</showWarnings>
+                        <showDeprecation>true</showDeprecation>
+                        <compilerArgs>
+                            <arg>-Xlint:all</arg>
+                            <arg>-parameters</arg>
+                        </compilerArgs>
+                    </configuration>
+                </plugin>
+
+                <!-- Maven Surefire Plugin for running tests -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.2.5</version>
+                    <configuration>
+                        <includes>
+                            <include>**/*Test.java</include>
+                            <include>**/*Tests.java</include>
+                        </includes>
+                        <argLine>-Xmx1024m</argLine>
+                        <useModulePath>false</useModulePath>
+                    </configuration>
+                </plugin>
+
+                <!-- Maven Failsafe Plugin for integration tests -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <version>3.2.5</version>
+                    <executions>
+                        <execution>
+                            <goals>
+                                <goal>integration-test</goal>
+                                <goal>verify</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+
+                <!-- Maven JAR Plugin -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>3.3.0</version>
+                    <configuration>
+                        <archive>
+                            <manifest>
+                                <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+                                <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
+                            </manifest>
+                        </archive>
+                    </configuration>
+                </plugin>
+
+                <!-- Maven Shade Plugin for creating fat JARs -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-shade-plugin</artifactId>
+                    <version>3.5.1</version>
+                    <configuration>
+                        <createDependencyReducedPom>true</createDependencyReducedPom>
+                        <filters>
+                            <filter>
+                                <artifact>*:*</artifact>
+                                <excludes>
+                                    <exclude>META-INF/*.SF</exclude>
+                                    <exclude>META-INF/*.DSA</exclude>
+                                    <exclude>META-INF/*.RSA</exclude>
+                                </excludes>
+                            </filter>
+                        </filters>
+                    </configuration>
+                </plugin>
+
+                <!-- Maven Source Plugin for generating source JARs -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-source-plugin</artifactId>
+                    <version>3.3.0</version>
+                    <executions>
+                        <execution>
+                            <id>attach-sources</id>
+                            <goals>
+                                <goal>jar-no-fork</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+
+                <!-- Maven Javadoc Plugin -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-javadoc-plugin</artifactId>
+                    <version>3.6.3</version>
+                    <configuration>
+                        <source>${maven.compiler.source}</source>
+                        <doclint>none</doclint>
+                        <quiet>true</quiet>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>attach-javadocs</id>
+                            <goals>
+                                <goal>jar</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+
+                <!-- Maven Resources Plugin -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>3.3.1</version>
+                    <configuration>
+                        <encoding>${project.build.sourceEncoding}</encoding>
+                    </configuration>
+                </plugin>
+
+                <!-- Maven Clean Plugin -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-clean-plugin</artifactId>
+                    <version>3.3.2</version>
+                </plugin>
+
+                <!-- Maven Install Plugin -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-install-plugin</artifactId>
+                    <version>3.1.1</version>
+                </plugin>
+
+                <!-- Maven Deploy Plugin -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-deploy-plugin</artifactId>
+                    <version>3.1.1</version>
+                </plugin>
+
+                <!-- Maven Enforcer Plugin for build environment validation -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-enforcer-plugin</artifactId>
+                    <version>3.4.1</version>
+                    <executions>
+                        <execution>
+                            <id>enforce-maven-version</id>
+                            <goals>
+                                <goal>enforce</goal>
+                            </goals>
+                            <configuration>
+                                <rules>
+                                    <requireMavenVersion>
+                                        <version>[3.8.0,)</version>
+                                    </requireMavenVersion>
+                                    <requireJavaVersion>
+                                        <version>[21,)</version>
+                                    </requireJavaVersion>
+                                </rules>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
+
+                <!-- Versions Maven Plugin for dependency management -->
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>versions-maven-plugin</artifactId>
+                    <version>2.16.2</version>
+                    <configuration>
+                        <generateBackupPoms>false</generateBackupPoms>
+                    </configuration>
+                </plugin>
+
+                <!-- ANTLR4 Maven Plugin -->
                 <plugin>
                     <groupId>org.antlr</groupId>
                     <artifactId>antlr4-maven-plugin</artifactId>
                     <version>${antlr.version}</version>
                 </plugin>
+
+                <!-- Maven Plugin Plugin for Maven plugin development -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-plugin-plugin</artifactId>
+                    <version>3.11.0</version>
+                </plugin>
             </plugins>
         </pluginManagement>
+
+        <plugins>
+            <!-- Enforce Maven and Java versions for all modules -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+            </plugin>
+        </plugins>
     </build>
 </project>

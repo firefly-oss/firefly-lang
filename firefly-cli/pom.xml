@@ -7,7 +7,7 @@
     <parent>
         <groupId>com.firefly</groupId>
         <artifactId>firefly-lang</artifactId>
-        <version>0.4.0</version>
+        <version>1.0-Alpha</version>
     </parent>
 
     <artifactId>firefly-cli</artifactId>
@@ -20,6 +20,20 @@
             <groupId>com.firefly</groupId>
             <artifactId>firefly-compiler</artifactId>
             <version>${project.version}</version>
+        </dependency>
+
+        <!-- Firefly REPL -->
+        <dependency>
+            <groupId>com.firefly</groupId>
+            <artifactId>firefly-repl</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- JLine for terminal handling -->
+        <dependency>
+            <groupId>org.jline</groupId>
+            <artifactId>jline</artifactId>
+            <version>3.25.0</version>
         </dependency>
     </dependencies>
 
@@ -67,7 +81,7 @@
                                     <mainClass>com.firefly.cli.FireflyCLI</mainClass>
                                 </transformer>
                             </transformers>
-                            <finalName>firefly-cli</finalName>
+                            <finalName>fly-cli</finalName>
                         </configuration>
                     </execution>
                 </executions>
