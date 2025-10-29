@@ -1,409 +1,371 @@
-# 🔥 Firefly Programming Language
-
-**A modern, expressive programming language that compiles to JVM bytecode with seamless Java ecosystem integration.**
-
-[![Java](https://img.shields.io/badge/Java-21+-orange.svg)](https://www.oracle.com/java/)
-[![Maven](https://img.shields.io/badge/Maven-3.6+-blue.svg)](https://maven.apache.org/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2-brightgreen.svg)](https://spring.io/projects/spring-boot)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-
-## 🎯 What is Firefly?
-
-Firefly is a statically-typed programming language designed for developers who want:
-
-- **Modern, clean syntax** inspired by Rust, Kotlin, and Swift
-- **100% JVM compatibility** - runs on any JVM and integrates seamlessly with Java libraries
-- **First-class Spring Boot support** - build production-ready microservices with native Spring annotations
-- **Type safety without verbosity** - expressive type system with inference
-- **Zero runtime overhead** - compiles directly to optimized JVM bytecode
-
-## ⚡ Quick Start
-
-### Installation
-
-#### Quick Install (Recommended)
-
-Install Firefly with a single command:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/firefly-oss/firefly-lang/main/install.sh | bash
-```
-
-Or download and inspect first:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/firefly-oss/firefly-lang/main/install.sh -o install.sh
-chmod +x install.sh
-./install.sh
-```
-
-#### Custom Installation
-
-```bash
-# Install to custom location (no sudo required)
-curl -fsSL https://raw.githubusercontent.com/firefly-oss/firefly-lang/main/install.sh | bash -s -- --prefix ~/.local
-
-# Install specific version
-curl -fsSL https://raw.githubusercontent.com/firefly-oss/firefly-lang/main/install.sh | bash -s -- --branch v0.1.0
-```
-
-#### Manual Build
-
-```bash
-# Clone the repository
-git clone https://github.com/firefly-oss/firefly-lang.git
-cd firefly-lang
-
-# Build and install
-mvn clean install
-./install.sh --clone-dir .
-```
-
-#### Requirements
-
-- Java 21+ (JDK)
-- Maven 3.6+
-- Git
-
-#### Uninstall
-
-```bash
-# Uninstall from default location
-curl -fsSL https://raw.githubusercontent.com/firefly-oss/firefly-lang/main/uninstall.sh | bash
-
-# Or if installed to custom prefix
-curl -fsSL https://raw.githubusercontent.com/firefly-oss/firefly-lang/main/uninstall.sh | bash -s -- ~/.local
-```
-
-### Hello World
-
-Create `hello.fly`:
-
-```firefly
-package hello
-
-fn main(args: Array<String>) -> Unit {
-    println("Hello, Firefly! 🔥");
-}
-```
-
-Compile and run:
-
-```bash
-# Compile
-firefly compile hello.fly
-
-# Run
-java -cp . hello.Main
-```
-
-Output:
-```
-Hello, Firefly! 🔥
-```
-
-#### Verify Installation
-
-```bash
-# Check version
-firefly --version
-
-# Get help
-firefly --help
-```
-
-## 🚀 Key Features
-
-### Modern Syntax
-
-```firefly
-// Type inference
-let name = "Firefly";
-let count = 42;
-
-// Pattern matching
-match status {
-    Ok(value) -> println("Success: " + value),
-    Error(msg) -> println("Error: " + msg)
-}
-
-// Functions as first-class citizens
-fn map<T, R>(list: List<T>, fn: (T) -> R) -> List<R> {
-    // ...
-}
-```
-
-### Spring Boot Integration
-
-```firefly
-package com.example
-
-import org::springframework::boot::SpringApplication
-import org::springframework::boot::autoconfigure::SpringBootApplication
-import org::springframework::web::bind::annotation::*
-
-@SpringBootApplication
-class Application {
-    fn main(args: Array<String>) -> Unit {
-        SpringApplication.run(Application.class, args);
-    }
-}
-
-@RestController
-@RequestMapping("/api")
-class UserController {
-    @GetMapping("/users/{id}")
-    fn getUser(@PathVariable id: String) -> User {
-        return User(id, "John Doe");
-    }
-}
-```
-
-### Java Interop
-
-```firefly
-// Use any Java library seamlessly
-import java::util::ArrayList
-import java::util::stream::Collectors
-
-fn processData(items: List<String>) -> List<String> {
-    let list = ArrayList<String>();
-    items.forEach(item -> list.add(item.toUpperCase()));
-    return list;
-}
-```
-
-## 📚 Documentation
-
-### Getting Started
-
-- **[Quick Start](#-quick-start)** - Install and run your first program
-- **[Hello World Example](#hello-world)** - Your first Firefly program
-- **[Full Language Guide](GUIDE.md)** - Complete tutorial and reference (recommended start)
-
-### Language Reference
-
-- **[Language Guide](GUIDE.md)** - Comprehensive language tutorial
-  - Variables, functions, and control flow
-  - Classes, interfaces, and OOP
-  - Pattern matching and advanced features
-  - Best practices and idioms
-  
-- **[Syntax Reference](SYNTAX.md)** - Quick lookup for syntax
-  - Variables and types
-  - Functions and methods
-  - Classes and interfaces
-  - Control flow
-  - Annotations
-
-- **[Implementation Status](STATUS.md)** - Current feature status
-  - What's implemented and working
-  - What's in progress
-  - Roadmap and future plans
-
-### Integration Guides
-
-- **[Spring Boot Integration](docs/SPRING_BOOT_INTEGRATION.md)** - Technical deep dive
-  - Architecture and design
-  - Classloader integration
-  - Method resolution
-  - Maven plugin usage
-  - Testing procedures
-
-- **[Git Setup](docs/GIT_SETUP.md)** - Version control configuration
-  - Repository setup
-  - Branch strategy
-  - CI/CD integration
-
-### Examples & Tutorials
-
-- **[Examples Directory](examples/)** - Working code samples
-  - [Hello World](examples/hello-world/) - Basic syntax
-  - [Basic Syntax](examples/basic-syntax/) - Language features
-  - [Spring Boot Demo](examples/spring-boot/) - Complete REST API
-  - [More examples...](examples/)
-
-### Project Information
-
-- **[Documentation Summary](docs/DOCUMENTATION_SUMMARY.md)** - Documentation overview
-- **[Contributing Guide](CONTRIBUTING.md)** - How to contribute
-
-## 🏗️ Project Structure
-
-```
-firefly-lang/
-├── firefly-compiler/       # Compiler implementation
-│   ├── lexer & parser     # ANTLR-based parsing
-│   ├── AST                # Abstract Syntax Tree
-│   ├── semantic analysis  # Type checking & validation
-│   └── codegen            # JVM bytecode generation
-├── firefly-maven-plugin/  # Maven integration
-├── firefly-runtime/       # Runtime library
-└── examples/              # Code examples
-    ├── hello-world/
-    ├── basic-syntax/
-    └── spring-boot/
-```
-
-## 🎓 Examples
-
-### Hello World
-
-```firefly
-package examples
-
-fn main(args: Array<String>) -> Unit {
-    println("Hello, Firefly! 🔥");
-}
-```
-
-[Full example →](examples/hello-world/)
-
-### REST API with Spring Boot
-
-```firefly
-@RestController
-@RequestMapping("/api")
-class ProductController {
-    @GetMapping("/products")
-    fn getAllProducts() -> List<Product> {
-        return productService.findAll();
-    }
-    
-    @PostMapping("/products")
-    fn createProduct(@RequestBody product: Product) -> Product {
-        return productService.save(product);
-    }
-}
-```
-
-[Full example →](examples/spring-boot/)
-
-### Data Classes and Pattern Matching
-
-```firefly
-data class Result<T> {
-    value: T,
-    error: String?
-}
-
-fn processResult<T>(result: Result<T>) -> String {
-    match result.error {
-        None -> "Success: " + result.value,
-        Some(err) -> "Error: " + err
-    }
-}
-```
-
-[More examples →](examples/)
-
-## 🔧 Maven Integration
-
-Add Firefly compilation to your Maven project:
-
-```xml
-<build>
-    <plugins>
-        <plugin>
-            <groupId>com.firefly</groupId>
-            <artifactId>firefly-maven-plugin</artifactId>
-            <version>0.4.0</version>
-            <executions>
-                <execution>
-                    <phase>process-classes</phase>
-                    <goals>
-                        <goal>compile</goal>
-                    </goals>
-                </execution>
-            </executions>
-        </plugin>
-    </plugins>
-</build>
-```
-
-Place your `.fly` files in `src/main/firefly/` and they'll be compiled automatically.
-
-## 🧪 Testing
-
-Run the test suite:
-
-```bash
-mvn clean test
-```
-
-## 🗺️ Roadmap
-
-### ✅ Completed (v0.1)
-
-- [x] Complete lexer and parser
-- [x] AST construction and visitor pattern
-- [x] Semantic analysis with type checking
-- [x] JVM bytecode generation
-- [x] Spring Boot integration
-- [x] Maven plugin
-- [x] Static method resolution
-- [x] Annotation support
-
-### 🚧 In Progress (v0.2)
-
-- [ ] Generics support
-- [ ] Pattern matching implementation
-- [ ] Trait system
-- [ ] Standard library expansion
-- [ ] IDE support (VS Code extension)
-
-### 🔮 Future (v0.3+)
-
-- [ ] Null safety
-- [ ] Coroutines/async-await
-- [ ] Module system
-- [ ] Package manager
-- [ ] REPL
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-### Development Setup
-
-```bash
-# Clone and build
-git clone https://github.com/firefly-oss/firefly-lang.git
-cd firefly-lang
-mvn clean install
-
-# Run tests
-mvn test
-
-# Build documentation
-mvn site
-```
-
-## 📖 Learn More
-
-- [Language Guide](GUIDE.md) - Complete language documentation
-- [Spring Boot Tutorial](examples/spring-boot/README.md) - Build microservices
-- [API Reference](docs/api/) - Runtime API documentation
-
-## 📄 License
-
-Firefly is released under the [MIT License](LICENSE).
-
-## 🙏 Acknowledgments
-
-Firefly draws inspiration from:
-- **Rust** - Modern syntax and type system
-- **Kotlin** - JVM integration patterns
-- **Swift** - Clean, expressive syntax
-- **Scala** - Functional programming on the JVM
-
-## 💬 Community
-
-- **Website**: [getfirefly.io](https://getfirefly.io)
-- **GitHub**: [firefly-oss](https://github.com/firefly-oss)
-- **Issues**: [GitHub Issues](https://github.com/firefly-oss/firefly-lang/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/firefly-oss/firefly-lang/discussions)
+# Flylang
+
+<p align="center">
+  <strong>A pragmatic JVM language for the modern backend engineer</strong>
+</p>
+
+<p align="center">
+  Expression-oriented · Async-first · Seamless Java Interop
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/version-1.0--Alpha-blue.svg" alt="Version 1.0-Alpha">
+  <img src="https://img.shields.io/badge/Java-21+-orange.svg" alt="Java 21+">
+  <img src="https://img.shields.io/badge/Maven-3.8+-red.svg" alt="Maven 3.8+">
+  <img src="https://img.shields.io/badge/license-Apache%202.0-green.svg" alt="License">
+</p>
 
 ---
 
-**Developed by [Firefly Software Solutions Inc.](https://getfirefly.io) 🔥**
+Flylang combines **concise, Rust-inspired syntax** with **first-class Java interoperability** to deliver a productive, type-safe language for building microservices, REST APIs, and concurrent systems on the JVM.
+
+**Write less code. Reason more clearly. Ship faster.**
+
+---
+
+## Table of Contents
+- [Why Flylang?](#why-flylang)
+- [Quick Start](#quick-start)
+- [Language Highlights](#language-highlights)
+- [Spring Boot Integration](#spring-boot-integration)
+- [Tooling](#tooling)
+- [Examples](#examples)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [License](#license)
+
+---
+
+## Why Flylang?
+
+### 🎯 The Problem
+JVM languages often force trade-offs:
+- **Java:** Verbose, boilerplate-heavy, weak concurrency primitives
+- **Kotlin:** Good interop but still JVM-centric idioms, nullable types by default
+- **Scala:** Powerful but complex, steep learning curve, slow compilation
+
+### ✨ The Solution
+Flylang delivers:
+- **📦 Zero-friction Java interop:** Use Spring Boot, Jackson, JPA—no wrappers, no runtime overhead
+- **⚡ Async-first concurrency:** Built-in `async`/`await`, typed `Future<T>`, timeouts, and combinators
+- **🔒 Immutability by default:** Structs and sparks are immutable; mutation is opt-in and explicit
+- **🧩 Expression-oriented:** Everything returns a value; no need for explicit `return`
+- **📚 Predictable semantics:** Explicit dispatch (`::` for methods, `.` for fields), strong typing
+- **🔧 Small, understandable toolchain:** Compiler and runtime you can reason about
+
+### 👥 Who Should Use Flylang?
+- Backend engineers building Spring Boot microservices
+- Teams migrating from Java who want modern syntax without rewriting everything
+- Developers who value clarity, immutability, and async-first design
+- Anyone tired of `NullPointerException` and callback hell
+
+---
+
+## Quick Start
+
+### Installation
+
+**Prerequisites:** Java 21+, Maven 3.8+
+
+```bash
+# Clone and build
+git clone https://github.com/your-org/firefly-lang.git
+cd firefly-lang
+mvn clean install -DskipTests
+
+# Optional: Install CLI globally
+bash scripts/install.sh --from-source --prefix "$HOME/.local"
+export PATH="$HOME/.local/bin:$PATH"
+fly version  # Should print: Flylang CLI 1.0-Alpha
+```
+
+### Hello World
+
+Create `Main.fly`:
+
+```fly path=null start=null
+module examples::hello_world
+
+class Main {
+  pub fn fly(args: [String]) -> Void {
+    println("Hello, Flylang!");
+  }
+}
+```
+
+Run it:
+```bash
+fly run examples/hello-world
+# Output: Hello, Flylang!
+```
+
+**Next steps:** See [GETTING_STARTED.md](docs/GETTING_STARTED.md) for Maven project setup and editor configuration.
+
+---
+
+## Language Highlights
+
+### 🚀 Async/Await (Built-in)
+
+```fly path=null start=null
+use com::firefly::runtime::async::Future
+
+class Service {
+  pub async fn fetchData(id: Int) -> String {
+    // Simulated async work
+    "data-" + id
+  }
+
+  pub fn processAll() -> Void {
+    let f1: Future = self::fetchData(1);
+    let f2: Future = self::fetchData(2);
+    
+    // Wait for all to complete
+    Future::all(f1, f2)::get();
+    
+    println(f1::get() + ", " + f2::get());
+  }
+}
+```
+
+### 🔄 Pattern Matching
+
+```fly path=null start=null
+data Result { Ok(String), Err(Int) }
+
+let r: Result = Result::Ok("success");
+
+let msg: String = match r {
+  Ok(value) => "Got: " + value,
+  Err(code) => "Error " + code,
+  _ => "unknown"
+};
+```
+
+### ✨ Sparks (Smart Records)
+
+```fly path=null start=null
+spark Account {
+  id: String,
+  balance: Int,
+  owner: String,
+
+  // Validation enforced at construction
+  validate { self.balance >= 0 }
+
+  // Computed properties
+  computed isActive: Bool { self.balance > 0 }
+}
+
+let acc: Account = Account { 
+  id: "ACC001", 
+  balance: 100, 
+  owner: "Alice" 
+};
+```
+
+### 🔗 Java Interop (Zero Ceremony)
+
+```fly path=null start=null
+use java::util::{ArrayList, Collections}
+use java::lang::Math
+
+class Demo {
+  pub fn run() -> Void {
+    let list: ArrayList = new ArrayList();
+    list::add("banana");
+    list::add("apple");
+    Collections::sort(list);
+    
+    let max: Int = Math::max(10, 42);
+    println("Max: " + max);
+  }
+}
+```
+
+### ⏱️ Timeouts
+
+```fly path=null start=null
+pub async fn slowTask() -> Int {
+  Thread::sleep(500);
+  42
+}
+
+pub fn withTimeout() -> Void {
+  let result: Int = timeout(100) {
+    slowTask().await
+  };
+  println("Result: " + result);
+}
+```
+
+---
+
+## Spring Boot Integration
+
+Flylang has **first-class Spring Boot support** with zero compromises:
+
+```fly path=null start=null
+use org::springframework::boot::SpringApplication
+use org::springframework::boot::autoconfigure::SpringBootApplication
+use org::springframework::web::bind::annotation::{RestController, GetMapping}
+
+@SpringBootApplication
+class Application {
+  pub fn fly(args: [String]) -> Void {
+    SpringApplication::run(Application.class);
+  }
+}
+
+@RestController
+class HelloController {
+  @GetMapping("/hello")
+  pub fn hello() -> String {
+    "Hello from Flylang + Spring Boot"
+  }
+}
+```
+
+**Features:**
+- ✅ All standard annotations (`@RestController`, `@Autowired`, `@Transactional`)
+- ✅ Jackson JSON mapping for structs and sparks
+- ✅ JPA, Spring Data, Spring Security
+- ✅ Native JVM performance (no reflection overhead)
+
+📚 **Learn more:** [SPRING_BOOT_GUIDE.md](docs/SPRING_BOOT_GUIDE.md)
+
+---
+
+## Tooling
+
+### CLI
+```bash
+fly version              # Show version and build info
+fly compile <file.fly>   # Compile a single .fly file
+fly run <file.fly>       # Compile and run a single .fly file
+fly run <project-dir>    # Build and run a Maven project
+fly check <file.fly>     # Validate syntax and types
+fly repl                 # Start interactive REPL
+```
+
+### Maven Plugin
+```xml
+<plugin>
+  <groupId>com.firefly</groupId>
+  <artifactId>firefly-maven-plugin</artifactId>
+  <version>1.0-Alpha</version>
+  <executions>
+    <execution>
+      <goals>
+        <goal>compile</goal>
+      </goals>
+    </execution>
+  </executions>
+</plugin>
+```
+
+### Editor Support
+
+| Editor | Features | Installation |
+|--------|----------|-------------|
+| **VS Code** | Syntax highlighting, LSP (completion, hover, diagnostics), snippets | Build from `ide-plugins/vscode-firefly/` |
+| **IntelliJ IDEA** | Syntax highlighting, LSP, templates | Build from `ide-plugins/intellij-firefly/` |
+
+📚 **Setup guide:** [GETTING_STARTED.md → Editor Setup](docs/GETTING_STARTED.md#editor-setup)
+
+---
+
+## Examples
+
+Each `examples/` folder is a standalone Maven project:
+
+| Example | Description |
+|---------|-------------|
+| **hello-world** | Basic "Hello, World!" |
+| **async-demo** | Async functions and `Future::get()` |
+| **concurrency-demo** | Concurrent execution, race, timeouts |
+| **futures-combinators-demo** | `Future::all`, `Future::any` |
+| **patterns-demo** | Tuple and struct pattern matching |
+| **data-patterns-demo** | Algebraic data types (ADTs) |
+| **java-interop-advanced** | Collections, Time API, static calls |
+| **sparks-demo** | Immutable smart records with validation |
+| **async-pipeline-demo** | Parallel fan-out/fan-in with timeout |
+| **spring-boot-demo** | REST API with Spring Boot integration |
+| **enum-demo** | Enum declarations and usage |
+| **task-manager-cli** | Command-line task manager app |
+
+**Run any example:**
+```bash
+fly run examples/<example-name>
+```
+
+📚 **Full index:** [EXAMPLES.md](docs/EXAMPLES.md)
+
+---
+
+## Documentation
+
+### 📘 For Users
+- **[INTRODUCTION.md](docs/INTRODUCTION.md)** — Philosophy, comparison, learning paths
+- **[GETTING_STARTED.md](docs/GETTING_STARTED.md)** — Install, first project, editors
+- **[LANGUAGE_GUIDE.md](docs/LANGUAGE_GUIDE.md)** — Complete syntax and semantics
+- **[RECIPES.md](docs/RECIPES.md)** — Copy-paste code snippets
+- **[SPRING_BOOT_GUIDE.md](docs/SPRING_BOOT_GUIDE.md)** — Build REST APIs
+
+### 📙 For Contributors
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** — System design overview
+- **[IMPLEMENTATION_GUIDE.md](docs/IMPLEMENTATION_GUIDE.md)** — Compiler internals
+
+### 📚 Full Index
+➡️ **[DOCS_INDEX.md](docs/DOCS_INDEX.md)** — Complete documentation map
+
+---
+
+## Roadmap
+
+**v1.0-Alpha (Current):**
+- ✅ Core language (classes, structs, sparks, data, async)
+- ✅ Pattern matching, timeouts, futures
+- ✅ Java interop, Spring Boot support
+- ✅ Maven plugin, CLI, LSP, IDE plugins
+
+**Upcoming:**
+- ⚙️ Full generics support for data/spark types
+- ⚙️ Enum, trait, protocol codegen completion
+- ⚙️ Standard library expansion
+- ⚙️ Structured concurrency primitives
+
+📌 See [GitHub Issues](https://github.com/your-org/firefly-lang/issues) for details.
+
+---
+
+## Contributing
+
+We welcome contributions! Here's how to get started:
+
+1. **Report bugs or request features:** Open a [GitHub Issue](https://github.com/your-org/firefly-lang/issues)
+2. **Submit improvements:** Fork, create a branch, submit a PR
+3. **Discuss major changes:** Open a discussion before large refactors
+
+**Development setup:** See [GETTING_STARTED.md → Build from Source](docs/GETTING_STARTED.md#installation)
+
+---
+
+## License
+
+Apache License 2.0 © 2025 Firefly Software Solutions Inc.
+
+See [LICENSE](LICENSE) for details.
+
+---
+
+<p align="center">
+  <strong>Built with ❤️ for the JVM community</strong>
+</p>
+
+<p align="center">
+  <a href="docs/GETTING_STARTED.md">Get Started</a> ·
+  <a href="docs/LANGUAGE_GUIDE.md">Language Guide</a> ·
+  <a href="docs/EXAMPLES.md">Examples</a> ·
+  <a href="https://github.com/your-org/firefly-lang">GitHub</a>
+</p>
