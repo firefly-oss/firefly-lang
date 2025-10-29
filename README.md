@@ -68,14 +68,19 @@ Flylang delivers:
 **Prerequisites:** Java 21+, Maven 3.8+
 
 ```bash
-# Clone and build
-git clone https://github.com/your-org/firefly-lang.git
+# Option 1: Quick install from GitHub (recommended)
+curl -fsSL https://raw.githubusercontent.com/firefly-oss/firefly-lang/main/scripts/install.sh | bash
+
+# Option 2: Install to custom location (e.g., user home)
+curl -fsSL https://raw.githubusercontent.com/firefly-oss/firefly-lang/main/scripts/install.sh | bash -s -- --prefix "$HOME/.local"
+export PATH="$HOME/.local/bin:$PATH"
+
+# Option 3: Build from source
+git clone https://github.com/firefly-oss/firefly-lang.git
 cd firefly-lang
 mvn clean install -DskipTests
-
-# Optional: Install CLI globally
 bash scripts/install.sh --from-source --prefix "$HOME/.local"
-export PATH="$HOME/.local/bin:$PATH"
+
 fly version  # Should print: Flylang CLI 1.0-Alpha
 ```
 
@@ -335,7 +340,7 @@ fly run examples/<example-name>
 - ⚙️ Standard library expansion
 - ⚙️ Structured concurrency primitives
 
-📌 See [GitHub Issues](https://github.com/your-org/firefly-lang/issues) for details.
+📌 See [GitHub Issues](https://github.com/firefly-oss/firefly-lang/issues) for details.
 
 ---
 
@@ -343,7 +348,7 @@ fly run examples/<example-name>
 
 We welcome contributions! Here's how to get started:
 
-1. **Report bugs or request features:** Open a [GitHub Issue](https://github.com/your-org/firefly-lang/issues)
+1. **Report bugs or request features:** Open a [GitHub Issue](https://github.com/firefly-oss/firefly-lang/issues)
 2. **Submit improvements:** Fork, create a branch, submit a PR
 3. **Discuss major changes:** Open a discussion before large refactors
 
@@ -367,5 +372,5 @@ See [LICENSE](LICENSE) for details.
   <a href="docs/GETTING_STARTED.md">Get Started</a> ·
   <a href="docs/LANGUAGE_GUIDE.md">Language Guide</a> ·
   <a href="docs/EXAMPLES.md">Examples</a> ·
-  <a href="https://github.com/your-org/firefly-lang">GitHub</a>
+  <a href="https://github.com/firefly-oss/firefly-lang">GitHub</a>
 </p>
