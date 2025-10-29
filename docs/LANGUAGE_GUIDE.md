@@ -1,619 +1,491 @@
-# Firefly Language Guide
+# Flylang Language Guide
+
+This guide is grounded in real examples under `examples/` and the current compiler/runtime. It introduces the language from first principles and grows into advanced topics.
+
+---
 
 ## Table of Contents
-1. [Introduction](#introduction)
-2. [Getting Started](#getting-started)
-3. [Basic Syntax](#basic-syntax)
-4. [Functions](#functions)
-5. [Variables](#variables)
-6. [Types](#types)
-7. [Operators](#operators)
-8. [Control Flow](#control-flow)
-9. [Data Structures](#data-structures)
-10. [Concurrency](#concurrency)
-11. [Error Handling](#error-handling)
-12. [Advanced Features](#advanced-features)
+- Overview and Philosophy
+- Modules and Imports
+- Values, Types, and Bindings
+- Functions, Methods, and Visibility
+- Classes and Instances
+- Structs and Sparks
+- Data Types (ADTs) and Pattern Matching
+- Expressions and Control Flow
+- Async, Futures, and Timeouts
+- Java Interop
+- Source Rules and Conventions
+- Tooling
+- Best Practices
+- Known Limitations
 
----
+## Overview and Philosophy
+Flylang is an expression‑oriented, strongly‑typed JVM language with a focus on predictable semantics and pragmatic interoperability with Java. Immutability by default, explicitness where it matters, and a small runtime make it easy to reason about programs.
 
-## Introduction
+## Modules and Imports
+- A file begins with a `module` declaration using `::` separators.
+- Imports use `use` with `::` to reference Java or Flylang symbols.
+- Static and instance calls use `::` (mandatory) — this keeps dispatch explicit.
 
-Firefly is a modern, statically-typed programming language that compiles to JVM bytecode. It combines the best features of functional and imperative programming with first-class concurrency support.
+Example:
+```fly
+module examples::hello_world
 
-### Key Features
-- **Type Safety**: Strong static typing with type inference
-- **Concurrency**: Built-in concurrent, race, and timeout constructs
-- **Pattern Matching**: Powerful pattern matching for control flow
-- **Immutability**: Immutable by default, explicit mutability
-- **JVM Integration**: Seamless Java interoperability
-
----
-
-## Getting Started
-
-### Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/firefly-lang.git
-cd firefly-lang
-
-# Build the compiler
-mvn clean install
-
-# Add to PATH (optional)
-export PATH=$PATH:$(pwd)/firefly-cli/target
-```
-
-### Your First Program
-
-Create a file `hello.fly`:
-
-```firefly
-fn main() {
-    let message = "Hello, Firefly!";
+class Main {
+  pub fn fly(args: [String]) -> Void {
+    println("Hello, Flylang!");
+  }
 }
 ```
 
-Compile and run:
+## Values, Types, and Bindings
+- Bind with `let name: Type = expr;`
+- Common types: `Int`, `Bool`, `String`, tuples (e.g., `(Int, Int)`), arrays like `[T]` when applicable in examples.
+- Values are immutable by default — create a new value to “update”.
 
-```bash
-firefly compile hello.fly
-java -cp . Main
-```
-
----
-
-## Basic Syntax
-
-### Comments
-
-```firefly
-// Single-line comment
-
-/*
-Multi-line comment
-spanning multiple lines
-*/
-```
-
-### Statements and Expressions
-
-Firefly distinguishes between statements (no value) and expressions (produce value):
-
-```firefly
-// Statement (requires semicolon)
-let x = 42;
-
-// Expression (last value in block)
-fn getValue() -> Int {
-    42  // No semicolon - this is returned
-}
-```
-
----
-
-## Functions
-
-### Function Declaration
-
-```firefly
-fn functionName(param1: Type1, param2: Type2) -> ReturnType {
-    // Function body
-    result
-}
-```
-
-### Examples
-
-```firefly
-// Simple function
-fn add(a: Int, b: Int) -> Int {
-    a + b
-}
-
-// Function without parameters
-fn getPI() -> Float {
-    3.14159
-}
-
-// Function without return value (returns Unit)
-fn printMessage(msg: String) {
-    println(msg);
-}
-
-// Function with multiple statements
-fn calculate(x: Int, y: Int) -> Int {
-    let sum = x + y;
-    let product = x * y;
-    sum + product
-}
-```
-
-### Calling Functions
-
-```firefly
-let result = add(5, 3);
-let pi = getPI();
-printMessage("Hello");
-```
-
----
-
-## Variables
-
-### Immutable Variables (let)
-
-```firefly
-let name = "Alice";
-let age = 30;
-let price = 99.99;
-```
-
-### Mutable Variables (let mut)
-
-```firefly
-let mut counter = 0;
-counter = counter + 1;
-counter = counter + 1;
-```
-
-### Type Annotations
-
-```firefly
+Examples:
+```fly
 let x: Int = 42;
-let name: String = "Bob";
-let isActive: Bool = true;
+let ok: Bool = true;
+let who: String = "Alice";
+let pair = (1, 2);
 ```
 
-### Shadowing
+## Functions, Methods, and Visibility
+- Functions live in classes, modules, or sparks. Visibility: `pub` to export.
+- Method invocation is `expr::method(args)`; static invocation is `Type::method(args)`.
+- The entry point is `pub fn fly(args: [String]) -> Void`.
 
-```firefly
-let x = 5;
-let x = x + 1;  // New variable, shadows previous
-let x = "now a string";  // Different type allowed
+```fly
+class Greeter {
+  pub fn hello(name: String) -> String {
+    "Hello, " + name
+  }
+}
 ```
 
----
+## Classes and Instances
+- Construct with `new Type(args)`; access fields with `expr.field`.
+- Call instance methods via `instance::method(...)`.
 
-## Types
-
-### Primitive Types
-
-```firefly
-let integer: Int = 42;
-let floating: Float = 3.14;
-let text: String = "Hello";
-let flag: Bool = true;
-let character: Char = 'A';
-```
-
-### Optional Types
-
-```firefly
-let maybeNumber: Int? = Some(42);
-let nothing: String? = None;
-
-// Unwrap with ?
-let value = maybeNumber?;
-```
-
-### Array Types
-
-```firefly
-let numbers: [Int] = [1, 2, 3, 4, 5];
-let names: [String] = ["Alice", "Bob", "Charlie"];
-```
-
-### Function Types
-
-```firefly
-let operation: (Int, Int) -> Int = add;
-let result = operation(5, 3);
-```
-
----
-
-## Operators
-
-### Arithmetic
-
-```firefly
-let sum = 10 + 5;        // 15
-let difference = 10 - 5;  // 5
-let product = 10 * 5;     // 50
-let quotient = 10 / 5;    // 2
-let remainder = 10 % 3;   // 1
-```
-
-### Comparison
-
-```firefly
-let equal = 5 == 5;           // true
-let notEqual = 5 != 3;        // true
-let lessThan = 3 < 5;         // true
-let lessOrEqual = 5 <= 5;     // true
-let greaterThan = 5 > 3;      // true
-let greaterOrEqual = 5 >= 5;  // true
-```
-
-### Logical
-
-```firefly
-let and = true && false;   // false
-let or = true || false;    // true
-let not = !true;           // false
-```
-
-### Precedence
-
-```firefly
-let result = 2 + 3 * 4;      // 14 (not 20)
-let result2 = (2 + 3) * 4;   // 20
-```
-
----
-
-## Control Flow
-
-### if/else
-
-```firefly
-if condition {
-    // Code if true
-} else {
-    // Code if false
+```fly
+class Demo {
+  pub fn squared(x: Int) -> Int { x * x }
 }
 
-// if as expression
-let value = if x > 0 {
-    1
-} else {
-    -1
+let d: Demo = new Demo();
+let n: Int = d::squared(7);
+```
+
+## Structs and Sparks
+### Structs (immutable product types)
+- Define with fields; instances are constructed with record syntax.
+- The compiler generates equality, hash, toString, and JavaBean getters.
+
+```fly
+struct Point { x: Int, y: Int }
+let p: Point = Point { x: 0, y: 0 };
+```
+
+### Sparks (validated smart records)
+- Support `validate { ... }` and `computed` properties.
+
+```fly
+spark Account {
+  id: String,
+  balance: Int,
+  owner: String,
+
+  validate { self.balance >= 0 }
+  computed isActive: Bool { self.balance > 0 }
+}
+```
+
+## Data Types (ADTs) and Pattern Matching
+- Define ADTs with `data`; construct variants via `Type::Variant(...)`.
+- Pattern match on structs, tuples, and data variants; `_` is a wildcard; name binds a value.
+
+```fly
+data Result { Ok(String), Err(Int) }
+
+let r1: Result = Result::Ok("done");
+let r2: Result = Result::Err(404);
+
+let a: String = match r1 { Ok(s) => s, _ => "unknown" };
+let b: String = match r2 { Err(code) => "error=" + code, _ => "ok" };
+```
+
+Tuple and struct patterns:
+```fly
+struct P { x: Int, y: Int }
+let p0: P = P { x: 0, y: 0 };
+let m: String = match p0 {
+  P { x: 0, y: 0 } => "origin",
+  P { x, y } => "(" + x + "," + y + ")",
+  _ => "other"
+};
+
+let s: String = match (1, 2, 3) {
+  (1, _, _) => "starts-with-1",
+  (_, 2, _) => "middle-2",
+  _ => "other"
 };
 ```
 
-### Nested Conditionals
+## Expressions and Control Flow
+- Everything is an expression; the last expression in a block is the value.
+- `if` and `match` are expressions; use them inline.
 
-```firefly
-if score >= 90 {
-    "A"
-} else {
-    if score >= 80 {
-        "B"
-    } else {
-        if score >= 70 {
-            "C"
-        } else {
-            "F"
-        }
-    }
-}
+```fly
+let sign: String = if n > 0 { "pos" } else { "neg" };
 ```
 
-### while Loop
+## Async, Futures, and Timeouts
+- `async fn` returns `Future<T>`.
+- Inside async bodies use `.await`; outside, use `Future::get()`.
+- Combinators: `Future::all(...)`, `Future::any(...)`, and `timeout(ms) { ... }`.
 
-```firefly
-let mut counter = 0;
-while counter < 10 {
-    counter = counter + 1;
+```fly
+use com::firefly::runtime::async::Future
+
+class Work {
+  pub async fn compute() -> Int { 40 + 2 }
 }
+
+let f: Future = Work::compute();
+let value: Int = timeout(50) { f.await };
 ```
 
-### for Loop
+## Java Interop
+- Import Java types with `use java::...`.
+- Construct with `new`, call instance/static with `::`.
+- Annotations are supported and emitted correctly in bytecode.
 
-```firefly
-for i in 0..10 {
-    // Process i
-}
+```fly
+use java::util::{ArrayList, Collections}
+use java::lang::Math
 
-for item in array {
-    // Process item
-}
+let items: ArrayList = new ArrayList();
+items::add("banana");
+Collections::sort(items);
+let m: Int = Math::max(10, 42);
 ```
 
-### break and continue
+## Source Rules and Conventions
+- `::` is mandatory for both static and instance calls.
+- Field access is dot: `expr.field`.
+- Last expression returns (no `return` needed).
+- Prefer immutable values; create new records instead of mutating.
 
-```firefly
-while true {
-    if condition {
-        break;  // Exit loop
-    }
-    if skipThis {
-        continue;  // Skip to next iteration
-    }
-}
-```
-
----
-
-## Data Structures
-
-### Structs
-
-```firefly
-struct Person {
-    name: String,
-    age: Int,
-    email: String
-}
-
-// Create instance
-let person = Person {
-    name: "Alice",
-    age: 30,
-    email: "alice@example.com"
-};
-
-// Access fields
-let name = person.name;
-```
-
-### Data Types (Enums)
-
-```firefly
-data Result<T, E> {
-    Ok(T),
-    Err(E)
-}
-
-data Option<T> {
-    Some(T),
-    None
-}
-
-// Usage
-let success: Result<Int, String> = Result::Ok(42);
-let failure: Result<Int, String> = Result::Err("error");
-```
-
-### Pattern Matching
-
-```firefly
-match value {
-    0 => "zero",
-    1 => "one",
-    2 => "two",
-    _ => "other"
-}
-
-match result {
-    Result::Ok(value) => handleSuccess(value),
-    Result::Err(error) => handleError(error)
-}
-```
-
----
-
-## Concurrency
-
-### Async Functions
-
-```firefly
-async fn fetchData(id: Int) -> String {
-    let response = httpGet("/api/data/{id}").await;
-    response.body
-}
-```
-
-### Concurrent Execution
-
-```firefly
-concurrent {
-    let result1 = fetchData(1).await,
-    let result2 = fetchData(2).await,
-    let result3 = fetchData(3).await
-}
-```
-
-### Race for First Result
-
-```firefly
-race {
-    fetchFromCache().await,
-    fetchFromDB().await,
-    fetchFromAPI().await
-}
-```
-
-### Timeout Protection
-
-```firefly
-timeout(5000) {
-    slowOperation().await
-}
-```
-
----
-
-## Error Handling
-
-### Result Type
-
-```firefly
-fn divide(a: Int, b: Int) -> Result<Int, String> {
-    if b == 0 {
-        Result::Err("Division by zero")
-    } else {
-        Result::Ok(a / b)
-    }
-}
-```
-
-### Error Propagation
-
-```firefly
-fn process() -> Result<Int, String> {
-    let value = divide(10, 2)?;  // Early return on error
-    Result::Ok(value * 2)
-}
-```
-
-### Option Type
-
-```firefly
-fn findUser(id: Int) -> Option<User> {
-    if userExists(id) {
-        Option::Some(getUser(id))
-    } else {
-        Option::None
-    }
-}
-```
-
----
-
-## Advanced Features
-
-### Traits
-
-```firefly
-trait Printable {
-    fn print(self);
-}
-
-impl Printable for Person {
-    fn print(self) {
-        println("Name: {self.name}, Age: {self.age}");
-    }
-}
-```
-
-### Generic Functions
-
-```firefly
-fn identity<T>(value: T) -> T {
-    value
-}
-
-fn swap<T>(a: T, b: T) -> (T, T) {
-    (b, a)
-}
-```
-
-### Lambda Expressions
-
-```firefly
-let add = |a, b| a + b;
-let result = add(5, 3);
-
-// With explicit types
-let multiply: (Int, Int) -> Int = |a, b| a * b;
-```
-
-### Method Chaining
-
-```firefly
-let result = numbers
-    .filter(|n| n > 0)
-    .map(|n| n * 2)
-    .reduce(0, |acc, n| acc + n);
-```
-
----
+## Tooling
+- CLI: `fly compile` / `fly run`
+- Maven: `com.firefly:firefly-maven-plugin` compiles `src/main/firefly`
+- LSP provides diagnostics, completion, hover, navigation
 
 ## Best Practices
+- Organize modules by domain: `com::example::api::{controllers,models,services}`
+- Use sparks for validated domain models; derive computed properties
+- Keep async boundaries narrow; prefer `Future::all/any` for coordination
 
-### 1. Use Immutability by Default
+## Known Limitations
+- In some contexts, complex expressions like `Application.class` in multi‑arg static calls may require temporaries:
+  ```fly
+  let appClass = Application.class;
+  SpringApplication::run(appClass);
+  ```
+- Generic collections interop may require explicit types/casts in some frameworks.
 
-```firefly
-// Good
-let x = 42;
+---
 
-// Only when necessary
-let mut counter = 0;
+## Advanced Topics
+
+### Nested Pattern Matching and Exhaustiveness
+Flylang's pattern matching is structural and supports nesting. The compiler aims for exhaustiveness checks when feasible.
+
+**Nested Data Patterns:**
+```fly
+data Payload { Json(String), Binary([Int]), None }
+data Response { Ok(Payload), Err(Int) }
+
+let r: Response = Response::Ok(Payload::Json("{}"));
+
+let msg: String = match r {
+  Ok(Json(s))      => "json: " + s,
+  Ok(Binary(bytes)) => "binary (" + bytes.length + " bytes)",
+  Ok(None)          => "empty",
+  Err(code)         => "error=" + code
+};
 ```
 
-### 2. Prefer Expressions over Statements
+**Nested Struct Patterns:**
+```fly
+struct Inner { value: Int }
+struct Outer { inner: Inner, tag: String }
 
-```firefly
-// Good - expression
-let value = if condition { 1 } else { 0 };
+let obj: Outer = Outer { inner: Inner { value: 42 }, tag: "test" };
 
-// Less idiomatic - statement
-let mut value = 0;
-if condition {
-    value = 1;
+let result: String = match obj {
+  Outer { inner: Inner { value: 0 }, tag } => "zero: " + tag,
+  Outer { inner, tag: "test" } => "test: " + inner.value,
+  _ => "other"
+};
+```
+
+**Array and Tuple Destructuring:**
+```fly
+// Array pattern
+let nums: [Int] = [1, 2, 3];
+let desc: String = match nums {
+  [] => "empty",
+  [x] => "singleton: " + x,
+  [x, y, ..] => "at least two: " + x + "," + y,
+  _ => "many"
+};
+
+// Tuple pattern
+let triple = (10, 20, 30);
+let sum: Int = match triple {
+  (a, b, c) => a + b + c
+};
+```
+
+**Exhaustiveness:**  
+If your match covers all cases of a data type explicitly, the compiler recognizes completeness. Always include a `_` arm for safety:
+```fly
+data Color { RED, GREEN, BLUE }
+let c: Color = Color::RED;
+
+let name: String = match c {
+  RED => "red",
+  GREEN => "green",
+  BLUE => "blue"
+  // No `_` needed if all variants covered; still recommended for maintainability
+};
+```
+
+### Guards and Range Patterns
+You can refine patterns with guard clauses (`when`) and range patterns:
+
+**Guard patterns:**
+```fly
+let age: Int = 25;
+let category: String = match age {
+  x when x < 13 => "child",
+  x when x >= 13 && x < 20 => "teen",
+  x when x >= 20 && x < 65 => "adult",
+  _ => "senior"
+};
+```
+
+**Range patterns (inclusive and exclusive):**
+```fly
+let score: Int = 85;
+let grade: String = match score {
+  0..60   => "F",   // exclusive upper bound
+  60..70  => "D",
+  70..80  => "C",
+  80..90  => "B",
+  90..=100 => "A",   // inclusive
+  _ => "out of range"
+};
+```
+
+### Advanced Async Patterns
+
+#### Combining Futures
+**All futures:**
+```fly
+use com::firefly::runtime::async::Future
+
+pub async fn fetch(id: Int) -> String { "data" + id }
+
+pub fn process() -> Void {
+  let f1: Future = fetch(1);
+  let f2: Future = fetch(2);
+  let f3: Future = fetch(3);
+
+  // Wait for all to complete
+  Future::all(f1, f2, f3)::get();
+
+  // Now all are ready
+  let d1: String = f1::get();
+  let d2: String = f2::get();
+  let d3: String = f3::get();
+  println(d1 + " " + d2 + " " + d3);
 }
 ```
 
-### 3. Use Pattern Matching
+**Any future (race to first complete):**
+```fly
+pub async fn taskA() -> Int { 42 }
+pub async fn taskB() -> Int { 99 }
 
-```firefly
-// Good
-match result {
-    Result::Ok(value) => process(value),
-    Result::Err(error) => handleError(error)
-}
-
-// Less idiomatic
-if result.isOk() {
-    process(result.unwrap());
-} else {
-    handleError(result.error());
+pub fn raceExample() -> Void {
+  let fA: Future = taskA();
+  let fB: Future = taskB();
+  let winner: Int = Future::any(fA, fB)::get();
+  println("First finished: " + winner);
 }
 ```
 
-### 4. Handle Errors Explicitly
-
-```firefly
-// Good
-match divide(10, 0) {
-    Result::Ok(value) => println(value),
-    Result::Err(error) => println("Error: {error}")
+**Timeout wrapper:**
+```fly
+pub async fn slowCompute() -> Int {
+  Thread::sleep(500);
+  100
 }
 
-// Avoid
-let value = divide(10, 0).unwrap();  // May panic!
+pub fn withTimeout() -> Void {
+  let result: Int = timeout(200) {
+    slowCompute().await
+  };
+  // If slowCompute takes >200ms, may throw or return fallback depending on runtime semantics
+  println("result=" + result);
+}
+```
+
+#### Async Composition
+Chain async work manually by calling `.await` in async functions:
+```fly
+pub async fn step1() -> Int { 10 }
+pub async fn step2(x: Int) -> Int { x + 20 }
+
+pub async fn pipeline() -> Int {
+  let a: Int = step1().await;
+  let b: Int = step2(a).await;
+  b
+}
+
+let final: Int = pipeline()::get();
+```
+
+### Style Conventions
+**Naming:**
+- Types: `PascalCase` (`Account`, `Result`)
+- Functions and variables: `snake_case` or `camelCase` (prefer `snake_case` for consistency with Rust-like aesthetics, but `camelCase` also accepted)
+- Modules: `lowercase::separated::by::colons`
+
+**Formatting:**
+- Use 2‑space indentation
+- Open braces on same line for blocks `{ ... }`
+- No semicolons in match arms (expression result is implicit)
+
+**Best Practices:**
+- **Explicit dispatch:** Always use `::` for method calls (instance or static) to avoid ambiguity.
+- **Immutability first:** Prefer `let` over `let mut`; create new values instead of mutating.
+- **Pattern exhaustiveness:** Always include a catch-all `_` arm in match expressions to handle future-proofing.
+- **Async boundaries:** Keep async boundaries clear; prefer `Future::all` / `Future::any` over manual coordination.
+- **Validation:** Use sparks for domain models that require invariants (e.g., non-negative balances, email format).
+
+### Type System Deep Dive
+Flylang supports:
+- **Primitives:** `Int`, `String`, `Bool`, `Float`, `Void` (and `Unit` as alias)
+- **Optionals:** `T?` for nullable types
+- **Union and intersection:** `T | U` (union), `T & U` (intersection) — experimental/advanced
+- **Function types:** `(T, U) -> R`
+- **Tuples:** `(Int, String, Bool)`
+- **Arrays/Lists:** `[T]`
+- **Maps:** `[K: V]`
+- **References:** `&T`, `&mut T` (for advanced memory semantics; mostly internal)
+
+Type inference is limited; always annotate in `let`, function parameters, and return types for clarity.
+
+### Error Handling Patterns
+**Try-catch (Java interop):**
+```fly
+use java::io::IOException
+
+pub fn readFile(path: String) -> String {
+  try {
+    // file read logic
+    "content"
+  } catch (IOException e) {
+    "error: " + e.getMessage()
+  } finally {
+    // cleanup
+  }
+}
+```
+
+**Result types (ADT style):**
+```fly
+data Result<T> { Ok(T), Err(String) }
+
+pub fn divide(a: Int, b: Int) -> Result {
+  if b == 0 {
+    Result::Err("division by zero")
+  } else {
+    Result::Ok(a / b)
+  }
+}
+
+let outcome: Result = divide(10, 2);
+let msg: String = match outcome {
+  Ok(val) => "result=" + val,
+  Err(e) => "error: " + e
+};
 ```
 
 ---
 
-## Common Patterns
+## Troubleshooting by Module
 
-### Builder Pattern
+### Compiler Errors
+**"Undefined symbol `X`"**  
+→ Ensure `use` declaration is present; check spelling and module path.
 
-```firefly
-struct UserBuilder {
-    name: String?,
-    age: Int?,
-    email: String?
-}
+**"Type mismatch: expected `T`, found `U`"**  
+→ Add explicit casts or conversions; check that method return types match variable annotations.
 
-impl UserBuilder {
-    fn name(mut self, name: String) -> UserBuilder {
-        self.name = Some(name);
-        self
-    }
-    
-    fn build(self) -> Result<User, String> {
-        // Validate and build
-    }
-}
-```
+**"Pattern match not exhaustive"**  
+→ Add a catch-all `_` arm in your match expression.
 
-### Visitor Pattern
+**"Cannot resolve method `foo` on `Type`"**  
+→ Verify the method exists; use `::` for instance/static calls, not `.` (dot is for field access only).
 
-```firefly
-trait Visitor {
-    fn visit_node(self, node: Node);
-}
+### Runtime Issues
+**"NullPointerException in generated code"**  
+→ Flylang is null-safe by design; if you interop with Java and receive null, wrap in `Option` or use `?` operator.
 
-fn accept<V: Visitor>(visitor: V) {
-    visitor.visit_node(self);
-}
-```
+**"ClassNotFoundException" or "NoClassDefFoundError"**  
+→ Ensure `firefly-runtime.jar` is on the classpath; Maven plugin should auto-configure; for CLI, use `-cp`.
+
+**"ValidationException" from Spark**  
+→ Spark's `validate` block failed; check constructor arguments satisfy invariants.
+
+### LSP and IDE
+**"No syntax highlighting"**  
+→ Verify VS Code or IntelliJ plugin is installed and enabled; check file extension is `.fly`.
+
+**"LSP not starting"**  
+→ Check `settings.json` for `firefly.lspPath` (VS Code) or plugin configuration (IntelliJ); ensure Java 17+ is available.
+
+**"Autocomplete not working"**  
+→ LSP needs the project compiled at least once; run `mvn compile` or `fly compile` first.
+
+### Maven Plugin
+**"Plugin execution not found"**  
+→ Add `<plugin>` entry in `<build><plugins>` with correct `groupId` and `artifactId`.
+
+**"Source directory not recognized"**  
+→ Default is `src/main/firefly`; override with `<sourceDirectory>` in plugin config.
+
+**"Compilation fails with cryptic errors"**  
+→ Run `mvn clean compile -X` for debug output; check `.fly` files for syntax errors first.
+
+### Spring Boot Integration
+**"Controller methods not mapped"**  
+→ Use `@RestController` or `@Controller` on class; ensure methods have `@GetMapping`, `@PostMapping`, etc.
+
+**"Dependency injection fails"**  
+→ Mark constructor parameters with `@Autowired` or use field injection; ensure Spring context scans your package.
+
+**"Application doesn't start"**  
+→ Check `fly` method calls `SpringApplication::run(...)` with correct arguments; verify `@SpringBootApplication` is present.
 
 ---
 
-## Next Steps
+**Next Steps:**  
+Explore `examples/` for runnable code; read `ARCHITECTURE.md` for compiler internals; see `SPRING_BOOT_GUIDE.md` for web app patterns.
 
-- Read the [Concurrency Guide](CONCURRENCY.md)
-- Explore [Example Programs](../examples/)
-- Check out [Spring Boot Integration](SPRING_BOOT.md)
-- Join the [Community](https://github.com/yourusername/firefly-lang)
-
----
-
-**Version**: 0.1.0  
-**Last Updated**: October 26, 2025
