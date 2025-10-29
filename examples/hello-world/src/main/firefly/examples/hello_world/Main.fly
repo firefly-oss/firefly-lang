@@ -1,0 +1,7 @@
+module examples::hello_world
+
+class Main {
+  pub fn fly(args: [String]) -> Void {
+    println("Hello, Flylang!");
+  }
+}

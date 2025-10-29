@@ -1,0 +1,31 @@
+module firefly::std::net
+
+use java::net::{URL, HttpURLConnection}
+use java::io::{BufferedReader, InputStreamReader}
+use java::nio::charset::StandardCharsets
+use java::lang::StringBuilder
+
+class Net {
+    pub static fn get(url: String) -> String {
+        let u: URL = new URL(url);
+        let conn: HttpURLConnection = u::openConnection();
+        conn::setRequestMethod("GET");
+        conn::setConnectTimeout(5000);
+        conn::setReadTimeout(5000);
+        let code: Int = conn::getResponseCode();
+        if code == 200 {
+            let reader: BufferedReader = new BufferedReader(new InputStreamReader(conn::getInputStream(), StandardCharsets::UTF_8));
+            let sb: StringBuilder = new StringBuilder();
+            let mut line: Object? = reader::readLine();
+            while line != none {
+                sb::append(line);
+                sb::append("\n");
+                line = reader::readLine();
+            };
+            reader::close();
+            sb::toString()
+        } else {
+            "HTTP " + code
+        }
+    }
+}

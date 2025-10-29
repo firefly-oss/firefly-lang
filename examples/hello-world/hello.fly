@@ -1,6 +1,0 @@
-package hello
-
-fn main(args: Array<String>) -> Unit {
-    println("Hello, Firefly! 🔥");
-    println("Welcome to the future of JVM programming.");
-}

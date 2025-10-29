@@ -1,0 +1,53 @@
+module examples::task_manager_cli
+
+use com::firefly::runtime::async::Future
+use java::util::ArrayList
+use java::util::Collections
+
+struct Task {
+  id: String,
+  title: String,
+  completed: Bool
+}
+
+class Store {
+  // In-memory task list backed by Java ArrayList for simplicity
+  pub fn create() -> ArrayList { new ArrayList() }
+
+  pub fn add(tasks: ArrayList, t: Task) -> Void {
+    tasks::add(t);
+  }
+
+  pub fn list(tasks: ArrayList) -> ArrayList {
+    // Return same list reference (demo)
+    tasks
+  }
+}
+
+class Main {
+  pub fn fly(args: [String]) -> Void {
+    let store: Store = new Store();
+    let tasks: ArrayList = store::create();
+
+    // Initialize tasks (async)
+    let m: Main = new Main();
+    let fut: Future = m::initialize(tasks);
+    fut::get();
+
+    // Simple CLI: args[0] command; args[1..] params
+    // For demo, we add and list deterministically
+    store::add(tasks, Task { id: "T1", title: "Setup project", completed: false });
+    store::add(tasks, Task { id: "T2", title: "Write docs", completed: true });
+
+    println("Tasks:");
+    let listed: ArrayList = store::list(tasks);
+    println("size=" + listed::size());
+  }
+
+  pub async fn initialize(tasks: ArrayList) -> Int {
+    // pretend long IO: create seed task
+    let s: Store = new Store();
+    s::add(tasks, Task { id: "SEED", title: "Seed", completed: false });
+    1
+  }
+}

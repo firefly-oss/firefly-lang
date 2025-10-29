@@ -1,0 +1,25 @@
+module examples::enums
+
+data Color {
+  RED,
+  GREEN,
+  BLUE
+}
+
+data Maybe {
+  Some(String),
+  None
+}
+
+class Main {
+  pub fn fly(args: [String]) -> Void {
+    let c: Color = Color::RED;
+    let m: Maybe = Maybe::Some("ok");
+    // Pattern match
+    let out: String = match m {
+      Some(s) => s,
+      _ => "none"
+    };
+    println(out);
+  }
+}

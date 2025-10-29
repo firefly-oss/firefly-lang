@@ -1,0 +1,41 @@
+module examples::data_patterns
+
+// Sum types
+// Result<T> emulation without type params for demo simplicity
+// Note: :: is mandatory for calls; constructors of data variants are static
+
+data Result {
+  Ok(String),
+  Err(Int)
+}
+
+data Color {
+  RED,
+  GREEN,
+  BLUE
+}
+
+class Main {
+  pub fn fly(args: [String]) -> Void {
+    let a: Result = Result::Ok("done");
+    let b: Result = Result::Err(404);
+
+    let sa: String = match a {
+      Ok(s) => s,
+      _ => "unknown"
+    };
+    println(sa);
+
+    let sb: String = match b {
+      Err(code) => "error=" + code,
+      _ => "ok"
+    };
+    println(sb);
+
+    let red: Color = Color::RED;
+    let msg: String = match red {
+      _ => "got color"
+    };
+    println(msg);
+  }
+}

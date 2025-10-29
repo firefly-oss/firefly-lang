@@ -1,0 +1,26 @@
+module examples::patterns_demo
+
+struct Point {
+  x: Int,
+  y: Int,
+}
+
+class Main {
+  pub fn fly(args: [String]) -> Void {
+    let p1: Point = Point { x: 0, y: 0 };
+    let msg1: String = match p1 {
+      Point { x: 0, y: 0 } => "origin",
+      Point { x, y } => "(" + x + "," + y + ")",
+      _ => "other"
+    };
+    println(msg1);
+
+    // Tuple-style matching
+    let m: String = match (1, 2, 3) {
+      (1, _, _) => "starts-with-1",
+      (_, 2, _) => "middle-2",
+      _ => "other"
+    };
+    println(m);
+  }
+}

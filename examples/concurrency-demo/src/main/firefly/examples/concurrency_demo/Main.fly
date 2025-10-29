@@ -1,0 +1,56 @@
+module examples::concurrency_demo
+
+use com::firefly::runtime::async::Future
+use java::lang::Thread
+
+class Main {
+    pub fn fly(args: [String]) -> Void {
+        println("-- async demo --");
+        let f1: Future = self::asyncWork(100, 10);
+        let f2: Future = self::asyncWork(50, 20);
+        let s1: Int = f1::get();
+        let s2: Int = f2::get();
+        println("sum=" + (s1 + s2));
+
+        println("-- concurrent demo --");
+        self::concurrentDemo()::get();
+        println("done concurrent");
+
+        println("-- race demo --");
+        let fastest: Int = self::raceDemo()::get();
+        println("race winner=" + fastest);
+
+        println("-- timeout demo --");
+        let result: Int = self::timeoutDemo()::get();
+        println("timeout result=" + result);
+    }
+
+    pub async fn concurrentDemo() -> Void {
+        println("start all");
+        let fa: Future = self::asyncWork(100, 1);
+        let fb: Future = self::asyncWork(90,  2);
+        let a: Int = fa::get();
+        let b: Int = fb::get();
+        println("a+b=" + (a + b));
+        println("end all");
+    }
+
+    pub async fn raceDemo() -> Int {
+        let f1: Future = self::asyncWork(200, 100);
+        let f2: Future = self::asyncWork(30,  200);
+        let f3: Future = self::asyncWork(100, 300);
+        let fastest: Int = Future::any(f1, f2, f3)::get();
+        fastest
+    }
+
+    pub async fn timeoutDemo() -> Int {
+        timeout(100) {
+            self::asyncWork(50, 999).await
+        }
+    }
+
+    pub async fn asyncWork(delayMs: Int, value: Int) -> Int {
+        Thread::sleep(delayMs);
+        value
+    }
+}

@@ -1,0 +1,18 @@
+module examples::sparks
+
+spark Account {
+  id: String,
+  balance: Int,
+  owner: String,
+
+  validate { self.balance >= 0 }
+
+  computed isActive: Bool { self.balance > 0 }
+}
+
+class Main {
+  pub fn fly(args: [String]) -> Void {
+    let a: Account = Account { id: "ACC001", balance: 100, owner: "Alice" };
+    println("OK");
+  }
+}

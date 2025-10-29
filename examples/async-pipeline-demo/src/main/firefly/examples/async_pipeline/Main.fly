@@ -1,0 +1,56 @@
+module examples::async_pipeline
+
+use com::firefly::runtime::async::Future
+use java::lang::Thread
+use java::time::{LocalDateTime}
+use java::time::format::DateTimeFormatter
+
+class Pipeline {
+  pub async fn fetchUser() -> String {
+    Thread::sleep(100);
+    "alice"
+  }
+  pub async fn fetchOrders() -> Int {
+    Thread::sleep(200);
+    5
+  }
+  pub async fn fetchBalance() -> Int {
+    Thread::sleep(150);
+    42
+  }
+}
+
+class Main {
+  pub async fn slow() -> String {
+    Thread::sleep(30);
+    "slow"
+  }
+  
+  pub fn fly(args: [String]) -> Void {
+    let p: Pipeline = new Pipeline();
+
+    // Run all concurrently and wait
+    let allF: Future = Future::all(
+      p::fetchUser(), p::fetchOrders(), p::fetchBalance()
+    );
+    allF::get(); // wait
+
+    let user: String = p::fetchUser()::get();
+    let orders: Int = p::fetchOrders()::get();
+    let balance: Int = p::fetchBalance()::get();
+
+    let now: LocalDateTime = LocalDateTime::now();
+    let fmt: DateTimeFormatter = DateTimeFormatter::ofPattern("HH:mm:ss");
+
+    println("user=" + user + ", orders=" + orders + ", balance=" + balance + ", at=" + now::format(fmt));
+
+    // Race faster computation
+    let f1: Future = p::fetchOrders();
+    let f2: Future = p::fetchBalance();
+    println("first-ready=" + Future::any(f1, f2)::get());
+
+    // Timeout wrapper using local capture inside lambda with graceful timeout handling
+    let t: String = try { timeout(50) { p::fetchUser().await } } catch (e) { "timeout" };
+    println("timeout-result=" + t);
+  }
+}

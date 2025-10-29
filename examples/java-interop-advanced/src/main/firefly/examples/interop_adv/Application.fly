@@ -1,0 +1,26 @@
+module examples::interop_adv
+
+use java::util::{ArrayList, Collections}
+use java::lang::Math
+use java::time::LocalDateTime
+use java::time::format::DateTimeFormatter
+
+class Application {
+    pub fn fly(args: [String]) -> Void {
+        // Collections interop
+        let items: ArrayList = new ArrayList();
+        items::add("banana");
+        items::add("apple");
+        items::add("cherry");
+        Collections::sort(items);
+        println("size=" + items::size());
+
+        // Static methods
+        println("max=" + Math::max(10, 42));
+
+        // Java time API
+        let now: LocalDateTime = LocalDateTime::now();
+        let fmt: DateTimeFormatter = DateTimeFormatter::ofPattern("yyyy-MM-dd HH:mm:ss");
+        println(now::format(fmt));
+    }
+}

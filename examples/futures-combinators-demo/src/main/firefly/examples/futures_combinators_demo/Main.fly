@@ -1,0 +1,36 @@
+module examples::futures_combinators_demo
+
+use com::firefly::runtime::async::Future
+use java::lang::Thread
+
+class Main {
+  pub async fn mk(delay: Int, value: Int) -> Int {
+    Thread::sleep(delay);
+    value
+  }
+
+  pub fn fly(args: [String]) -> Void {
+    println("-- futures combinators --");
+
+    // Async tasks
+    let f1: Future = self::mk(50, 10);
+    let f2: Future = self::mk(100, 20);
+    let f3: Future = self::mk(10, 99);
+
+    // Wait for all
+    Future::all(f1, f2)::get();
+    let a: Int = f1::get();
+    let b: Int = f2::get();
+    println("sum=" + (a + b));
+
+    // First finisher
+    let fastest: Int = Future::any(f2, f3)::get();
+    println("fastest=" + fastest);
+
+    // Timeout wrapper
+    let value: Int = timeout(50) {
+      self::mk(30, 7).await
+    };
+    println("timeout-value=" + value);
+  }
+}

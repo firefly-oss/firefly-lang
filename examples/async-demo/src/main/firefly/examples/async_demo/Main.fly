@@ -1,0 +1,16 @@
+module examples::async_demo
+
+use com::firefly::runtime::async::Future
+
+class Demo {
+  pub async fn compute() -> Int { 40 + 2 }
+  pub async fn mainAsync() -> Int { self::compute().await }
+}
+
+class Main {
+  pub fn fly(args: [String]) -> Void {
+    let d: Demo = new Demo();
+    let result: Int = d::mainAsync()::get();
+    println("" + result);
+  }
+}

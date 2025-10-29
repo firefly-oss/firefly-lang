@@ -1,0 +1,42 @@
+module com::example
+
+use org::springframework::boot::SpringApplication
+use org::springframework::boot::autoconfigure::SpringBootApplication
+use org::springframework::web::bind::annotation::{RestController, GetMapping, PostMapping, RequestParam, PathVariable, RequestBody}
+use java::lang::Class
+
+@SpringBootApplication
+class Application {
+    pub fn fly(args: [String]) -> Void {
+        SpringApplication::run(Application.class);
+    }
+}
+
+@RestController
+class HelloController {
+    @GetMapping("/hello")
+    pub fn hello() -> String {
+        "Hello from Flylang + Spring Boot"
+    }
+
+    // GET /users/{id}?greet=Name -> returns JSON
+    @GetMapping("/users/{id}")
+    pub fn getUser(
+        @PathVariable("id") id: String,
+        @RequestParam("greet") greet: String
+    ) -> User {
+        User { id: id, name: greet }
+    }
+
+    // POST /users with JSON body -> echoes with suffix
+    @PostMapping("/users")
+    pub fn createUser(@RequestBody body: User) -> User {
+        User { id: body.id, name: body.name + "_created" }
+    }
+}
+
+// Struct for JSON (has getters via codegen)
+struct User {
+    id: String,
+    name: String
+}
