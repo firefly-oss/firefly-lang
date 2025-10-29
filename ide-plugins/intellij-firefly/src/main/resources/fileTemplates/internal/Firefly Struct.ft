@@ -1,0 +1,7 @@
+package ${PACKAGE_NAME}
+
+struct ${NAME} {
+    field1: String,
+    field2: Int,
+}
+

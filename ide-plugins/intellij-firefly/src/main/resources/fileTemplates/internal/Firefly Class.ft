@@ -1,0 +1,10 @@
+package ${PACKAGE_NAME}
+
+class ${NAME} {
+    let field: String;
+    
+    fn method() -> Unit {
+        // TODO: Implement method
+    }
+}
+

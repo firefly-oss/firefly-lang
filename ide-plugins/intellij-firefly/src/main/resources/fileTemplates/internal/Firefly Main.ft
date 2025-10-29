@@ -1,0 +1,6 @@
+package ${PACKAGE_NAME}
+
+fn main() -> Unit {
+    println("Hello, Firefly! 🔥");
+}
+

@@ -1,0 +1,222 @@
+{
+  "Function": {
+    "prefix": "fn",
+    "body": [
+      "fn ${1:functionName}(${2:params}) -> ${3:Unit} {",
+      "\t${0:// function body}",
+      "}"
+    ],
+    "description": "Create a function"
+  },
+  "Main Function": {
+    "prefix": "main",
+    "body": [
+      "fn main() -> Unit {",
+      "\t${0:println(\"Hello, Firefly!\");}",
+      "}"
+    ],
+    "description": "Create main function"
+  },
+  "Class": {
+    "prefix": "class",
+    "body": [
+      "class ${1:ClassName} {",
+      "\tlet ${2:field}: ${3:Type};",
+      "\t",
+      "\tfn ${4:method}() -> ${5:Unit} {",
+      "\t\t${0:// method body}",
+      "\t}",
+      "}"
+    ],
+    "description": "Create a class"
+  },
+  "Interface": {
+    "prefix": "interface",
+    "body": [
+      "interface ${1:InterfaceName} {",
+      "\tfn ${2:method}() -> ${3:ReturnType};",
+      "}"
+    ],
+    "description": "Create an interface"
+  },
+  "Let Variable": {
+    "prefix": "let",
+    "body": [
+      "let ${1:variableName}: ${2:Type} = ${0:value};"
+    ],
+    "description": "Declare immutable variable"
+  },
+  "Mutable Variable": {
+    "prefix": "letmut",
+    "body": [
+      "let mut ${1:variableName}: ${2:Type} = ${0:value};"
+    ],
+    "description": "Declare mutable variable"
+  },
+  "If Statement": {
+    "prefix": "if",
+    "body": [
+      "if ${1:condition} {",
+      "\t${0:// code}",
+      "}"
+    ],
+    "description": "If statement"
+  },
+  "If-Else Statement": {
+    "prefix": "ifelse",
+    "body": [
+      "if ${1:condition} {",
+      "\t${2:// if code}",
+      "} else {",
+      "\t${0:// else code}",
+      "}"
+    ],
+    "description": "If-else statement"
+  },
+  "Match Expression": {
+    "prefix": "match",
+    "body": [
+      "match ${1:value} {",
+      "\t${2:pattern1} -> ${3:result1},",
+      "\t${4:pattern2} -> ${5:result2},",
+      "\t_ -> ${0:defaultResult}",
+      "}"
+    ],
+    "description": "Match expression"
+  },
+  "For Loop": {
+    "prefix": "for",
+    "body": [
+      "for ${1:item} in ${2:collection} {",
+      "\t${0:// loop body}",
+      "}"
+    ],
+    "description": "For loop"
+  },
+  "While Loop": {
+    "prefix": "while",
+    "body": [
+      "while ${1:condition} {",
+      "\t${0:// loop body}",
+      "}"
+    ],
+    "description": "While loop"
+  },
+  "PersistentList": {
+    "prefix": "plist",
+    "body": [
+      "let ${1:list} = PersistentList.of(${0:elements});"
+    ],
+    "description": "Create PersistentList"
+  },
+  "PersistentVector": {
+    "prefix": "pvec",
+    "body": [
+      "let ${1:vector} = PersistentVector.of(${0:elements});"
+    ],
+    "description": "Create PersistentVector"
+  },
+  "PersistentHashMap": {
+    "prefix": "pmap",
+    "body": [
+      "let ${1:map} = PersistentHashMap.empty();"
+    ],
+    "description": "Create PersistentHashMap"
+  },
+  "PersistentHashSet": {
+    "prefix": "pset",
+    "body": [
+      "let ${1:set} = PersistentHashSet.of(${0:elements});"
+    ],
+    "description": "Create PersistentHashSet"
+  },
+  "Package Declaration": {
+    "prefix": "package",
+    "body": [
+      "package ${1:com.example}",
+      "",
+      "${0}"
+    ],
+    "description": "Package declaration"
+  },
+  "Import Statement": {
+    "prefix": "import",
+    "body": [
+      "import ${0:package.ClassName}"
+    ],
+    "description": "Import statement"
+  },
+  "Print Line": {
+    "prefix": "println",
+    "body": [
+      "println(${0:\"message\"});"
+    ],
+    "description": "Print line"
+  },
+  "New Object": {
+    "prefix": "new",
+    "body": [
+      "let ${1:obj} = new ${2:ClassName}(${0:args});"
+    ],
+    "description": "Create new object"
+  },
+  "Try-Catch": {
+    "prefix": "try",
+    "body": [
+      "try {",
+      "\t${1:// code that may throw}",
+      "} catch (${2:Exception} ${3:e}) {",
+      "\t${0:// handle exception}",
+      "}"
+    ],
+    "description": "Try-catch block"
+  },
+  "Annotation": {
+    "prefix": "@",
+    "body": [
+      "@${1:AnnotationName}",
+      "${0}"
+    ],
+    "description": "Add annotation"
+  },
+  "RestController": {
+    "prefix": "@rest",
+    "body": [
+      "@RestController",
+      "@RequestMapping(\"${1:/api}\")",
+      "class ${2:ControllerName} {",
+      "\t@GetMapping(\"${3:/path}\")",
+      "\tfn ${4:method}() -> ${5:String} {",
+      "\t\t${0:return \"response\";}",
+      "\t}",
+      "}"
+    ],
+    "description": "Spring Boot REST controller"
+  },
+  "Service": {
+    "prefix": "@service",
+    "body": [
+      "@Service",
+      "class ${1:ServiceName} {",
+      "\t@Autowired",
+      "\tlet ${2:dependency}: ${3:Type};",
+      "\t",
+      "\tfn ${4:method}() -> ${5:ReturnType} {",
+      "\t\t${0:// service logic}",
+      "\t}",
+      "}"
+    ],
+    "description": "Spring Boot service"
+  },
+  "Component": {
+    "prefix": "@component",
+    "body": [
+      "@Component",
+      "class ${1:ComponentName} {",
+      "\t${0:// component code}",
+      "}"
+    ],
+    "description": "Spring Boot component"
+  }
+}
+

@@ -1,0 +1,23 @@
+package ${PACKAGE_NAME}
+
+import com.firefly.runtime.actors.Actor
+import com.firefly.runtime.actors.ActorContext
+
+class ${NAME}Actor extends Actor<${MESSAGE:Message}> {
+    
+    fn receive(message: ${MESSAGE:Message}, context: ActorContext<${MESSAGE:Message}>) -> Unit {
+        match message {
+            // TODO: Handle messages
+            _ -> println("Unknown message: " + message)
+        }
+    }
+    
+    fn preStart() -> Unit {
+        // TODO: Initialize actor
+    }
+    
+    fn postStop() -> Unit {
+        // TODO: Cleanup actor
+    }
+}
+

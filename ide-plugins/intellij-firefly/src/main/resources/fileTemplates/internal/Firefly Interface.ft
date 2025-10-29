@@ -1,0 +1,6 @@
+package ${PACKAGE_NAME}
+
+interface ${NAME} {
+    fn method() -> ReturnType;
+}
+

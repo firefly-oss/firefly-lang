@@ -1,0 +1,120 @@
+<idea-plugin>
+    <id>com.firefly.intellij</id>
+    <name>Firefly Language Support</name>
+    <vendor email="support@firefly-lang.org" url="https://github.com/firefly-oss/firefly-lang">Firefly OSS</vendor>
+
+    <description><![CDATA[
+    <h1>Firefly Language Support for IntelliJ IDEA</h1>
+    
+    <p>Official IntelliJ IDEA plugin for the Firefly programming language.</p>
+    
+    <h2>Features</h2>
+    <ul>
+        <li><b>Syntax Highlighting</b> - Full syntax highlighting for .fly files with customizable colors</li>
+        <li><b>LSP Integration</b> - Complete Language Server Protocol integration</li>
+        <li><b>Real-time Diagnostics</b> - Syntax and semantic errors highlighted as you type</li>
+        <li><b>Intelligent Code Completion</b> - Context-aware code suggestions (Ctrl+Space)</li>
+        <li><b>Hover Documentation</b> - View type information and documentation on hover (Ctrl+Q)</li>
+        <li><b>Code Commenter</b> - Quick comment/uncomment with Cmd+/ or Ctrl+/</li>
+        <li><b>Brace Matching</b> - Automatic matching of brackets and braces</li>
+        <li><b>File Templates</b> - 8 quick file creation templates</li>
+    </ul>
+    
+    <h2>Getting Started</h2>
+    <ol>
+        <li>Install the plugin</li>
+        <li>Create a new .fly file</li>
+        <li>Start coding in Firefly!</li>
+    </ol>
+    
+    <p>For more information, visit the <a href="https://github.com/firefly-oss/firefly-lang">Firefly GitHub repository</a>.</p>
+    ]]></description>
+
+    <change-notes><![CDATA[
+<h2>Version 1.0-Alpha</h2>
+    <ul>
+        <li>Initial release</li>
+        <li>Syntax highlighting for Firefly</li>
+        <li>LSP integration for code intelligence</li>
+        <li>File type support for .fly files</li>
+    </ul>
+    ]]></change-notes>
+
+    <!-- Product and plugin compatibility requirements -->
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.lang</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- LSP Client Service -->
+        <projectService serviceImplementation="com.firefly.intellij.lsp.FireflyLSPClient"/>
+
+        <!-- Startup Activity for LSP -->
+        <postStartupActivity implementation="com.firefly.intellij.lsp.FireflyLSPStartupActivity"/>
+
+        <!-- LSP Integration -->
+        <externalAnnotator language="Firefly" implementationClass="com.firefly.intellij.lsp.FireflyExternalAnnotator"/>
+        <completion.contributor language="Firefly" implementationClass="com.firefly.intellij.lsp.FireflyCompletionContributor"/>
+        <lang.documentationProvider language="Firefly" implementationClass="com.firefly.intellij.lsp.FireflyDocumentationProvider"/>
+        <gotoDeclarationHandler implementation="com.firefly.intellij.lsp.FireflyGotoDeclarationHandler"/>
+        <lang.findUsagesProvider language="Firefly" implementationClass="com.firefly.intellij.lsp.FireflyFindUsagesProvider"/>
+        <lang.psiStructureViewFactory language="Firefly" implementationClass="com.firefly.intellij.lsp.FireflyStructureViewProvider"/>
+        <codeInsight.parameterInfo language="Firefly" implementationClass="com.firefly.intellij.lsp.FireflyParameterInfoHandler"/>
+        <lang.formatter language="Firefly" implementationClass="com.firefly.intellij.lsp.FireflyFormattingModelBuilder"/>
+
+        <!-- File Type -->
+        <fileType
+                name="Firefly"
+                implementationClass="com.firefly.intellij.FireflyFileType"
+                fieldName="INSTANCE"
+                language="Firefly"
+                extensions="fly"/>
+
+        <!-- Language -->
+        <lang.parserDefinition
+                language="Firefly"
+                implementationClass="com.firefly.intellij.FireflyParserDefinition"/>
+
+        <!-- Syntax Highlighter -->
+        <lang.syntaxHighlighterFactory
+                language="Firefly"
+                implementationClass="com.firefly.intellij.FireflySyntaxHighlighterFactory"/>
+
+        <!-- Color Settings -->
+        <colorSettingsPage
+                implementation="com.firefly.intellij.FireflyColorSettingsPage"/>
+
+        <!-- Commenter -->
+        <lang.commenter
+                language="Firefly"
+                implementationClass="com.firefly.intellij.FireflyCommenter"/>
+
+        <!-- Brace Matcher -->
+        <lang.braceMatcher
+                language="Firefly"
+                implementationClass="com.firefly.intellij.FireflyBraceMatcher"/>
+
+        <!-- File Templates -->
+        <internalFileTemplate name="Firefly File"/>
+        <internalFileTemplate name="Firefly Main"/>
+        <internalFileTemplate name="Firefly Class"/>
+        <internalFileTemplate name="Firefly Interface"/>
+        <internalFileTemplate name="Firefly Struct"/>
+        <internalFileTemplate name="Firefly Data"/>
+        <internalFileTemplate name="Firefly Test"/>
+        <internalFileTemplate name="Firefly Actor"/>
+
+        <!-- Run Configuration -->
+        <configurationType implementation="com.firefly.intellij.run.FireflyConfigurationType"/>
+    </extensions>
+
+    <actions>
+        <!-- Add your actions here -->
+        <action id="Firefly.NewFile"
+                class="com.firefly.intellij.actions.NewFireflyFileAction"
+                text="Firefly File"
+                description="Create new Firefly file">
+            <add-to-group group-id="NewGroup" anchor="before" relative-to-action="NewFile"/>
+        </action>
+    </actions>
+</idea-plugin>
+

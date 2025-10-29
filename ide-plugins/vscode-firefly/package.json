@@ -1,0 +1,93 @@
+{
+  "name": "firefly-language",
+  "displayName": "Firefly Language Support",
+  "description": "Language support for Firefly programming language (.fly files)",
+  "version": "1.0-Alpha",
+  "publisher": "firefly-oss",
+  "icon": "images/icon.svg",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets",
+    "Linters"
+  ],
+  "keywords": [
+    "firefly",
+    "fly",
+    "jvm",
+    "spring-boot",
+    "java"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/firefly-oss/firefly-lang"
+  },
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onLanguage:firefly"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "firefly",
+        "aliases": [
+          "Firefly",
+          "firefly"
+        ],
+        "extensions": [
+          ".fly"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "firefly",
+        "scopeName": "source.firefly",
+        "path": "./syntaxes/firefly.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "firefly",
+        "path": "./snippets/firefly.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Firefly",
+      "properties": {
+        "firefly.languageServer.path": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the Firefly Language Server JAR file. Leave empty to use bundled server."
+        },
+        "firefly.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the language server."
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.75.0",
+    "typescript": "^5.3.2"
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  }
+}

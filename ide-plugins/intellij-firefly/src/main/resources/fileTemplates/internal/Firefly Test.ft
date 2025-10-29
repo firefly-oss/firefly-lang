@@ -1,0 +1,20 @@
+package ${PACKAGE_NAME}
+
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions.*
+
+class ${NAME}Test {
+    
+    @Test
+    fn testExample() -> Unit {
+        // Arrange
+        let expected = "expected value";
+        
+        // Act
+        let actual = "actual value";
+        
+        // Assert
+        assertEquals(expected, actual);
+    }
+}
+
