@@ -161,6 +161,37 @@ public final class Future<T> {
     }
     
     /**
+     * Alias for isCompleted() - checks if this future has completed.
+     * 
+     * @return true if completed
+     */
+    public boolean isDone() {
+        return underlying.isDone();
+    }
+    
+    /**
+     * Checks if this future was cancelled.
+     * 
+     * @return true if cancelled
+     */
+    public boolean isCancelled() {
+        return underlying.isCancelled();
+    }
+    
+    /**
+     * Attempts to cancel execution of this future.
+     * 
+     * @param mayInterruptIfRunning true if the thread executing this task
+     *        should be interrupted; otherwise, in-progress tasks are allowed
+     *        to complete
+     * @return false if the task could not be cancelled, typically because
+     *         it has already completed normally; true otherwise
+     */
+    public boolean cancel(boolean mayInterruptIfRunning) {
+        return underlying.cancel(mayInterruptIfRunning);
+    }
+    
+    /**
      * Checks if this future completed successfully.
      * 
      * @return true if completed successfully

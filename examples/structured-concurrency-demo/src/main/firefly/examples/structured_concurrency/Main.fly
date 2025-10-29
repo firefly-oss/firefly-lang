@@ -1,0 +1,54 @@
+module examples::structured_concurrency
+
+use com::firefly::runtime::async::Future
+use java::lang::Thread
+
+class Main {
+  pub async fn task(delay: Int, label: String) -> String {
+    Thread::sleep(delay);
+    label
+  }
+  
+  pub async fn mkInt(delay: Int, value: Int) -> Int {
+    Thread::sleep(delay);
+    value
+  }
+  
+  pub fn fly(args: [String]) -> Void {
+    println("=== Structured Concurrency Demo ===");
+    println("");
+
+    println("1. Basic Parallel Tasks:");
+    println("   Running 3 tasks in parallel...");
+
+    let f1: Future = self::task(100, "Task 1 complete");
+    let f2: Future = self::task(150, "Task 2 complete");
+    let f3: Future = self::task(50,  "Task 3 complete");
+
+    Future::all(f1, f2, f3)::get();
+
+    let s1: String = f1::get();
+    let s2: String = f2::get();
+    let s3: String = f3::get();
+    println("   " + s1);
+    println("   " + s2);
+    println("   " + s3);
+    println("");
+
+    println("2. Computing sum in parallel:");
+    let t1: Future = self::mkInt(10, 10);
+    let t2: Future = self::mkInt(20, 20);
+    let t3: Future = self::mkInt(30, 30);
+
+    Future::all(t1, t2, t3)::get();
+
+    let a: Int = t1::get();
+    let b: Int = t2::get();
+    let c: Int = t3::get();
+    let sum: Int = a + b + c;
+    println("   Sum: " + sum);
+    println("");
+
+    println("=== Demo Complete ===");
+  }
+}

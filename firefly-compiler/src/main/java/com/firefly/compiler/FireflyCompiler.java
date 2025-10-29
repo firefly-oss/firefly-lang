@@ -65,6 +65,8 @@ import java.util.stream.Stream;
  */
 public class FireflyCompiler {
 
+    private boolean quiet = false;
+
     /** Current compiler version */
     private static final String VERSION = "1.0-Alpha";
 
@@ -247,7 +249,11 @@ public class FireflyCompiler {
      * @throws IOException If file I/O errors occur during compilation
      */
     public void compile(Path sourceFile) throws IOException {
-        compile(sourceFile, null, false);
+        compile(sourceFile, null, false, false);
+    }
+
+    public void compileQuiet(Path sourceFile) throws IOException {
+        compile(sourceFile, null, false, true);
     }
 
     /**
@@ -276,13 +282,20 @@ public class FireflyCompiler {
      * @throws RuntimeException If compilation fails due to syntax or semantic errors
      */
     public void compile(Path sourceFile, Path outputDir, boolean showLogo) throws IOException {
+        compile(sourceFile, outputDir, showLogo, false);
+    }
+
+    public void compile(Path sourceFile, Path outputDir, boolean showLogo, boolean quiet) throws IOException {
         long startTime = System.currentTimeMillis();
+        this.quiet = quiet;
         
-        if (showLogo) {
+        if (showLogo && !quiet) {
             printLogo();
         }
 
-        ConsoleUI.printFileHeader(sourceFile.toString());
+        if (!quiet) {
+            ConsoleUI.printFileHeader(sourceFile.toString());
+        }
         
         boolean parseSuccess = false;
         boolean astSuccess = false;
@@ -294,7 +307,7 @@ public class FireflyCompiler {
         long linesOfCode = source.lines().count();
 
         // Phase 1: Lexical analysis and parsing
-        ConsoleUI.printPhase(1, 4, "Parsing");
+if (!quiet) ConsoleUI.printPhase(1, 4, "Parsing");
         long phaseStart = System.currentTimeMillis();
         CharStream input = CharStreams.fromString(source);
         FireflyLexer lexer = new FireflyLexer(input);
@@ -332,20 +345,20 @@ public class FireflyCompiler {
         }
 
         long phaseDuration = System.currentTimeMillis() - phaseStart;
-        ConsoleUI.printSuccess("Parse tree generated " + ConsoleUI.formatDuration(phaseDuration));
+if (!quiet) ConsoleUI.printSuccess("Parse tree generated " + ConsoleUI.formatDuration(phaseDuration));
         parseSuccess = true;
 
         // Phase 2: Build AST
-        ConsoleUI.printPhase(2, 4, "Building AST");
+if (!quiet) ConsoleUI.printPhase(2, 4, "Building AST");
         phaseStart = System.currentTimeMillis();
         AstBuilder astBuilder = new AstBuilder(sourceFile.toString());
         AstNode ast = astBuilder.visit(tree);
         phaseDuration = System.currentTimeMillis() - phaseStart;
-        ConsoleUI.printSuccess("AST constructed " + ConsoleUI.formatDuration(phaseDuration));
+if (!quiet) ConsoleUI.printSuccess("AST constructed " + ConsoleUI.formatDuration(phaseDuration));
         astSuccess = true;
 
         // Phase 3: Semantic analysis
-        ConsoleUI.printPhase(3, 4, "Semantic Analysis");
+if (!quiet) ConsoleUI.printPhase(3, 4, "Semantic Analysis");
         phaseStart = System.currentTimeMillis();
         TypeResolver sharedTypeResolver = new TypeResolver(classLoader);
         try {
@@ -376,7 +389,7 @@ public class FireflyCompiler {
                             System.out.println("  " + diagnostic.format(true));
                         }
                     } else {
-                        System.out.println("  " + diagnostic.format(true));
+if (!quiet) System.out.println("  " + diagnostic.format(true));
                     }
                 }
                 
@@ -386,13 +399,13 @@ public class FireflyCompiler {
                 }
                 
                 phaseDuration = System.currentTimeMillis() - phaseStart;
-                ConsoleUI.printSuccess("Semantic analysis passed " + ConsoleUI.formatDuration(phaseDuration));
+if (!quiet) ConsoleUI.printSuccess("Semantic analysis passed " + ConsoleUI.formatDuration(phaseDuration));
 
                 long warningCount = diagnostics.stream()
                     .filter(d -> d.getLevel() == CompilerDiagnostic.Level.WARNING)
                     .count();
                 if (warningCount > 0) {
-                    ConsoleUI.printWarning(warningCount + " warning(s)");
+if (!quiet) ConsoleUI.printWarning(warningCount + " warning(s)");
                 }
 
                 semanticSuccess = true;
@@ -408,7 +421,7 @@ public class FireflyCompiler {
         }
 
         // Phase 4: Bytecode generation
-        ConsoleUI.printPhase(4, 4, "Code Generation");
+if (!quiet) ConsoleUI.printPhase(4, 4, "Code Generation");
         phaseStart = System.currentTimeMillis();
         try {
             // Generate bytecode
@@ -456,14 +469,14 @@ public class FireflyCompiler {
                     classCount++;
 
                     if (classCount == 1) {
-                        ConsoleUI.printSuccess("Bytecode generated: " + ConsoleUI.formatPath(outputPath.toString()));
+if (!quiet) ConsoleUI.printSuccess("Bytecode generated: " + ConsoleUI.formatPath(outputPath.toString()));
                     } else {
-                        ConsoleUI.printDetail("✓ " + outputPath);
+if (!quiet) ConsoleUI.printDetail("✓ " + outputPath);
                     }
                 }
 
                 long phaseDurationCg = System.currentTimeMillis() - phaseStart;
-                ConsoleUI.printDetail(ConsoleUI.formatCount(classCount, "class", "classes") + ", " + phaseDurationCg + "ms");
+if (!quiet) ConsoleUI.printDetail(ConsoleUI.formatCount(classCount, "class", "classes") + ", " + phaseDurationCg + "ms");
                 codegenSuccess = true;
             } else {
                 ConsoleUI.printWarning("Code generation skipped (invalid AST)");
@@ -475,25 +488,25 @@ public class FireflyCompiler {
             }
         }
 
-        System.out.println();
+if (!quiet) System.out.println();
         long totalDuration = System.currentTimeMillis() - startTime;
 
         // Report compilation status with better design
         if (codegenSuccess) {
             String message = "Compilation completed (" + totalDuration + "ms, " +
                            ConsoleUI.formatCount((int)linesOfCode, "line", "lines") + ")";
-            ConsoleUI.printSuccessBox(message);
+if (!quiet) ConsoleUI.printSuccessBox(message);
         } else if (semanticSuccess) {
-            ConsoleUI.printWarningBox("Semantic analysis passed, code generation failed (" +
+if (!quiet) ConsoleUI.printWarningBox("Semantic analysis passed, code generation failed (" +
                                      totalDuration + "ms)");
         } else if (astSuccess) {
-            ConsoleUI.printWarningBox("Parsing succeeded, semantic analysis failed (" +
+if (!quiet) ConsoleUI.printWarningBox("Parsing succeeded, semantic analysis failed (" +
                                      totalDuration + "ms)");
         } else if (parseSuccess) {
-            ConsoleUI.printWarningBox("Parsing succeeded, AST building failed (" +
+if (!quiet) ConsoleUI.printWarningBox("Parsing succeeded, AST building failed (" +
                                      totalDuration + "ms)");
         } else {
-            ConsoleUI.printErrorBox("Compilation failed (" + totalDuration + "ms)");
+if (!quiet) ConsoleUI.printErrorBox("Compilation failed (" + totalDuration + "ms)");
         }
     }
     

@@ -1,0 +1,328 @@
+/**
+ * Firefly Standard Library - Validation Module
+ * 
+ * Provides validation utilities for common data validation scenarios.
+ * 
+ * @module firefly::std::validation
+ * @version 1.0.0
+ */
+
+module firefly::std::validation
+
+use firefly::std::result::{Result, Ok, Err}
+use firefly::std::option::{Option, Some, None}
+
+// ============================================================================
+// String Validation
+// ============================================================================
+
+/**
+ * Validates that a string is not empty.
+ * 
+ * @param value The string to validate
+ * @return Ok if not empty, Err with message otherwise
+ * 
+ * @example
+ *   validation.notEmpty("hello") // Ok("hello")
+ *   validation.notEmpty("") // Err("String cannot be empty")
+ */
+fn notEmpty(value: String) -> Result = {
+    if (value.length() > 0) {
+        Result::Ok(value)
+    } else {
+        Result::Err("String cannot be empty")
+    }
+}
+
+/**
+ * Validates that a string is not blank (not empty and not only whitespace).
+ * 
+ * @param value The string to validate
+ * @return Ok if not blank, Err with message otherwise
+ */
+fn notBlank(value: String) -> Result = {
+    if (value.trim().length() > 0) {
+        Result::Ok(value)
+    } else {
+        Result::Err("String cannot be blank")
+    }
+}
+
+/**
+ * Validates string length is within bounds.
+ * 
+ * @param value The string to validate
+ * @param min Minimum length (inclusive)
+ * @param max Maximum length (inclusive)
+ * @return Ok if within bounds, Err with message otherwise
+ */
+fn lengthBetween(value: String, min: Int, max: Int) -> Result = {
+    let len: Int = value.length();
+    if (len >= min && len <= max) {
+        Result::Ok(value)
+    } else {
+        Result::Err("String length must be between " + min + " and " + max)
+    }
+}
+
+/**
+ * Validates minimum string length.
+ * 
+ * @param value The string to validate
+ * @param min Minimum length (inclusive)
+ * @return Ok if meets minimum, Err with message otherwise
+ */
+fn minLength(value: String, min: Int) -> Result = {
+    if (value.length() >= min) {
+        Result::Ok(value)
+    } else {
+        Result::Err("String length must be at least " + min)
+    }
+}
+
+/**
+ * Validates maximum string length.
+ * 
+ * @param value The string to validate
+ * @param max Maximum length (inclusive)
+ * @return Ok if within maximum, Err with message otherwise
+ */
+fn maxLength(value: String, max: Int) -> Result = {
+    if (value.length() <= max) {
+        Result::Ok(value)
+    } else {
+        Result::Err("String length must be at most " + max)
+    }
+}
+
+/**
+ * Validates that a string matches a pattern.
+ * 
+ * @param value The string to validate
+ * @param pattern Regular expression pattern
+ * @return Ok if matches, Err with message otherwise
+ */
+fn matches(value: String, pattern: String) -> Result = {
+    if (value.matches(pattern)) {
+        Result::Ok(value)
+    } else {
+        Result::Err("String does not match pattern: " + pattern)
+    }
+}
+
+/**
+ * Validates email format (basic validation).
+ * 
+ * @param email The email to validate
+ * @return Ok if valid email format, Err with message otherwise
+ */
+fn email(email: String) -> Result = {
+    let pattern: String = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$";
+    if (email.matches(pattern)) {
+        Result::Ok(email)
+    } else {
+        Result::Err("Invalid email format")
+    }
+}
+
+/**
+ * Validates URL format (basic validation).
+ * 
+ * @param url The URL to validate
+ * @return Ok if valid URL format, Err with message otherwise
+ */
+fn url(url: String) -> Result = {
+    let pattern: String = "^https?://[A-Za-z0-9.-]+(:[0-9]+)?(/.*)?$";
+    if (url.matches(pattern)) {
+        Result::Ok(url)
+    } else {
+        Result::Err("Invalid URL format")
+    }
+}
+
+// ============================================================================
+// Numeric Validation
+// ============================================================================
+
+/**
+ * Validates that a number is positive.
+ * 
+ * @param value The number to validate
+ * @return Ok if positive, Err with message otherwise
+ */
+fn positive(value: Int) -> Result = {
+    if (value > 0) {
+        Result::Ok(value)
+    } else {
+        Result::Err("Value must be positive")
+    }
+}
+
+/**
+ * Validates that a number is non-negative.
+ * 
+ * @param value The number to validate
+ * @return Ok if non-negative, Err with message otherwise
+ */
+fn nonNegative(value: Int) -> Result = {
+    if (value >= 0) {
+        Result::Ok(value)
+    } else {
+        Result::Err("Value must be non-negative")
+    }
+}
+
+/**
+ * Validates that a number is within a range.
+ * 
+ * @param value The number to validate
+ * @param min Minimum value (inclusive)
+ * @param max Maximum value (inclusive)
+ * @return Ok if within range, Err with message otherwise
+ */
+fn range(value: Int, min: Int, max: Int) -> Result = {
+    if (value >= min && value <= max) {
+        Result::Ok(value)
+    } else {
+        Result::Err("Value must be between " + min + " and " + max)
+    }
+}
+
+/**
+ * Validates minimum value.
+ * 
+ * @param value The number to validate
+ * @param min Minimum value (inclusive)
+ * @return Ok if meets minimum, Err with message otherwise
+ */
+fn minValue(value: Int, min: Int) -> Result = {
+    if (value >= min) {
+        Result::Ok(value)
+    } else {
+        Result::Err("Value must be at least " + min)
+    }
+}
+
+/**
+ * Validates maximum value.
+ * 
+ * @param value The number to validate
+ * @param max Maximum value (inclusive)
+ * @return Ok if within maximum, Err with message otherwise
+ */
+fn maxValue(value: Int, max: Int) -> Result = {
+    if (value <= max) {
+        Result::Ok(value)
+    } else {
+        Result::Err("Value must be at most " + max)
+    }
+}
+
+// ============================================================================
+// Collection Validation
+// ============================================================================
+
+/**
+ * Validates that a collection is not empty.
+ * 
+ * @param size The size of the collection
+ * @return Ok if not empty, Err with message otherwise
+ */
+fn notEmptyCollection(size: Int) -> Result = {
+    if (size > 0) {
+        Result::Ok(size)
+    } else {
+        Result::Err("Collection cannot be empty")
+    }
+}
+
+/**
+ * Validates collection size is within bounds.
+ * 
+ * @param size The size of the collection
+ * @param min Minimum size (inclusive)
+ * @param max Maximum size (inclusive)
+ * @return Ok if within bounds, Err with message otherwise
+ */
+fn sizeBetween(size: Int, min: Int, max: Int) -> Result = {
+    if (size >= min && size <= max) {
+        Result::Ok(size)
+    } else {
+        Result::Err("Collection size must be between " + min + " and " + max)
+    }
+}
+
+// ============================================================================
+// Option Validation
+// ============================================================================
+
+/**
+ * Validates that an Option is Some.
+ * 
+ * @param opt The Option to validate
+ * @return Ok with inner value if Some, Err with message if None
+ */
+fn required(opt: Option) -> Result = {
+    match opt {
+        Some(value) => Result::Ok(value),
+        None => Result::Err("Value is required")
+    }
+}
+
+// ============================================================================
+// Custom Validation
+// ============================================================================
+
+/**
+ * Creates a custom validation from a predicate function.
+ * 
+ * @param value The value to validate
+ * @param predicate Function that returns true if valid
+ * @param errorMessage Error message to use if validation fails
+ * @return Ok if predicate returns true, Err with message otherwise
+ */
+fn custom(value: Object, predicate: Bool, errorMessage: String) -> Result = {
+    if (predicate) {
+        Result::Ok(value)
+    } else {
+        Result::Err(errorMessage)
+    }
+}
+
+// ============================================================================
+// Validation Combinators
+// ============================================================================
+
+/**
+ * Combines multiple validation results using AND logic.
+ * All validations must pass for the result to be Ok.
+ * 
+ * @param results Array of validation results
+ * @return Ok if all pass, Err with first error message otherwise
+ */
+fn all(results: [Result]) -> Result = {
+    for (result in results) {
+        match result {
+            Err(msg) => return Result::Err(msg),
+            _ => {}
+        }
+    }
+    Result::Ok("All validations passed")
+}
+
+/**
+ * Combines multiple validation results using OR logic.
+ * At least one validation must pass for the result to be Ok.
+ * 
+ * @param results Array of validation results
+ * @return Ok if any pass, Err with combined error messages otherwise
+ */
+fn any(results: [Result]) -> Result = {
+    for (result in results) {
+        match result {
+            Ok(value) => return Result::Ok(value),
+            _ => {}
+        }
+    }
+    Result::Err("All validations failed")
+}

@@ -248,7 +248,14 @@ class HelloController {
 fly version              # Show version and build info
 fly compile <file.fly>   # Compile a single .fly file
 fly run <file.fly>       # Compile and run a single .fly file
-fly run <project-dir>    # Build and run a Maven project
+fly run <project-dir>    # Build and run a Maven project (auto-resolves runtime classpath)
+fly test <project-dir>    # Run tests, prints concise summary (add --verbose for logs)
+# Flags:
+#   --verbose    Show full compiler logs / diagnostics
+#   --no-clear   Do not clear the screen before running program output
+
+# Utilities:
+fly doctor               # Validate Java/Maven/Gradle availability and environment
 fly check <file.fly>     # Validate syntax and types
 fly repl                 # Start interactive REPL
 ```
@@ -298,6 +305,7 @@ Each `examples/` folder is a standalone Maven project:
 | **spring-boot-demo** | REST API with Spring Boot integration |
 | **enum-demo** | Enum declarations and usage |
 | **task-manager-cli** | Command-line task manager app |
+| **structured-concurrency-demo** | Structured concurrency with StructuredScope |
 
 **Run any example:**
 ```bash
@@ -333,12 +341,16 @@ fly run examples/<example-name>
 - ✅ Pattern matching, timeouts, futures
 - ✅ Java interop, Spring Boot support
 - ✅ Maven plugin, CLI, LSP, IDE plugins
+- ✅ Full generics support for data/spark types
+- ✅ Enum, trait, protocol codegen (via data declarations)
+- ✅ Standard library expansion (validation module added)
+- ✅ Structured concurrency primitives (StructuredScope)
 
 **Upcoming:**
-- ⚙️ Full generics support for data/spark types
-- ⚙️ Enum, trait, protocol codegen completion
-- ⚙️ Standard library expansion
-- ⚙️ Structured concurrency primitives
+- 🔄 Advanced type inference improvements
+- 🔄 Macro system for code generation
+- 🔄 Native compilation via GraalVM
+- 🔄 IDE plugin enhancements (refactoring, debugging)
 
 📌 See [GitHub Issues](https://github.com/firefly-oss/firefly-lang/issues) for details.
 
