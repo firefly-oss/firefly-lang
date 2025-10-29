@@ -15,6 +15,7 @@ public class BinaryExpr extends Expression {
         MULTIPLY,      // *
         DIVIDE,        // /
         MODULO,        // %
+        POWER,         // **
         
         // Comparison
         EQUAL,         // ==
@@ -28,12 +29,19 @@ public class BinaryExpr extends Expression {
         AND,           // &&
         OR,            // ||
         
+        // Bitwise
+        BIT_AND,       // &
+        BIT_OR,        // |
+        BIT_XOR,       // ^
+        BIT_LEFT_SHIFT,  // <<
+        BIT_RIGHT_SHIFT, // >>
+        
         // Other
         RANGE,         // ..
         RANGE_INCLUSIVE, // ..=
         COALESCE,      // ??
         ELVIS,         // ?:
-        SEND           // >> (actor message send)
+        SEND           // >> (actor message send, requires special parsing context)
     }
     
     private final Expression left;

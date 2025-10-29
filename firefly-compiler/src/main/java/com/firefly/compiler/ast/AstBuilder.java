@@ -5,6 +5,7 @@ import com.firefly.compiler.FireflyBaseVisitor;
 import com.firefly.compiler.ast.decl.*;
 import com.firefly.compiler.ast.expr.*;
 import com.firefly.compiler.ast.type.*;
+import com.firefly.compiler.ast.pattern.*;
 import org.antlr.v4.runtime.tree.TerminalNode;
 
 import java.util.ArrayList;
@@ -30,16 +31,13 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
     @Override
     public CompilationUnit visitCompilationUnit(FireflyParser.CompilationUnitContext ctx) {
         SourceLocation loc = getLocation(ctx);
+
+        // Module declaration is now MANDATORY (uses :: separators, converted to dots for JVM)
+        String moduleName = ctx.moduleDeclaration().importPath().getText().replace("::", ".");
         
-        // Package declaration
-        String packageName = null;
-        if (ctx.packageDeclaration() != null) {
-            packageName = ctx.packageDeclaration().qualifiedName().getText();
-        }
-        
-        // Import declarations
-        List<ImportDeclaration> imports = ctx.importDeclaration().stream()
-            .map(this::buildImport)
+        // Use declarations (renamed from import)
+        List<UseDeclaration> imports = ctx.useDeclaration().stream()
+            .map(this::buildUse)
             .collect(Collectors.toList());
         
         // Top-level declarations
@@ -47,7 +45,7 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
             .map(declCtx -> (Declaration) visit(declCtx))
             .collect(Collectors.toList());
         
-        return new CompilationUnit(packageName, imports, declarations, loc);
+        return new CompilationUnit(moduleName, imports, declarations, loc);
     }
     
     @Override
@@ -62,18 +60,22 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
         
         // Visit the actual declaration
         Declaration result = null;
-        if (ctx.functionDeclaration() != null) {
-            result = (Declaration) visit(ctx.functionDeclaration());
-        } else if (ctx.classDeclaration() != null) {
+        if (ctx.classDeclaration() != null) {
             result = (Declaration) visit(ctx.classDeclaration());
         } else if (ctx.interfaceDeclaration() != null) {
             result = (Declaration) visit(ctx.interfaceDeclaration());
+        } else if (ctx.sparkDeclaration() != null) {
+            result = (Declaration) visit(ctx.sparkDeclaration());
         } else if (ctx.structDeclaration() != null) {
             result = (Declaration) visit(ctx.structDeclaration());
         } else if (ctx.dataDeclaration() != null) {
             result = (Declaration) visit(ctx.dataDeclaration());
         } else if (ctx.traitDeclaration() != null) {
             result = (Declaration) visit(ctx.traitDeclaration());
+        } else if (ctx.implDeclaration() != null) {
+            result = (Declaration) visit(ctx.implDeclaration());
+        } else if (ctx.exceptionDeclaration() != null) {
+            result = (Declaration) visit(ctx.exceptionDeclaration());
         }
         // Add other declaration types as needed
         
@@ -83,7 +85,7 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
         return result;
     }
     
-    private ImportDeclaration buildImport(FireflyParser.ImportDeclarationContext ctx) {
+    private UseDeclaration buildUse(FireflyParser.UseDeclarationContext ctx) {
         SourceLocation loc = getLocation(ctx);
         
         // Get the import path segments
@@ -147,7 +149,7 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
             isWildcard = true;
         }
         
-        return new ImportDeclaration(modulePath, items, isWildcard, loc);
+        return new UseDeclaration(modulePath, items, isWildcard, loc);
     }
     
     // ============ Expressions ============
@@ -235,6 +237,63 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
     }
     
     @Override
+    public Expression visitMethodCallExpr(FireflyParser.MethodCallExprContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+        // Instance method call: expression::method(args)
+        Expression receiver = (Expression) visit(ctx.expression());
+        String methodName = ctx.IDENTIFIER().getText();
+        
+        List<Expression> arguments = new ArrayList<>();
+        if (ctx.argumentList() != null) {
+            arguments = ctx.argumentList().expression().stream()
+                .map(argCtx -> (Expression) visit(argCtx))
+                .collect(Collectors.toList());
+        }
+        
+        // Represent as CallExpr with FieldAccessExpr as function, marked as from double-colon
+        FieldAccessExpr methodAccess = new FieldAccessExpr(receiver, methodName, false, true, loc);
+        return new CallExpr(methodAccess, arguments, loc);
+    }
+    
+    @Override
+    public Expression visitStaticMethodCallExpr(FireflyParser.StaticMethodCallExprContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+        // Static method call: ClassName::method(args)
+        String className = ctx.TYPE_IDENTIFIER().getText();
+        String methodName = ctx.IDENTIFIER().getText();
+        
+        List<Expression> arguments = new ArrayList<>();
+        if (ctx.argumentList() != null) {
+            arguments = ctx.argumentList().expression().stream()
+                .map(argCtx -> (Expression) visit(argCtx))
+                .collect(Collectors.toList());
+        }
+        
+        // Represent as CallExpr with FieldAccessExpr as function (from double-colon)
+        IdentifierExpr classRef = new IdentifierExpr(className, loc);
+        FieldAccessExpr methodAccess = new FieldAccessExpr(classRef, methodName, false, true, loc);
+        return new CallExpr(methodAccess, arguments, loc);
+    }
+    
+    @Override
+    public Expression visitStaticAccessExpr(FireflyParser.StaticAccessExprContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+        // Static field/constant access: ClassName::CONSTANT
+        String className = ctx.TYPE_IDENTIFIER(0).getText();
+        String memberName = ctx.TYPE_IDENTIFIER(1).getText();
+        
+        // Create a static field access: ClassName::member (mark as from double-colon)
+        IdentifierExpr classRef = new IdentifierExpr(className, loc);
+        return new FieldAccessExpr(classRef, memberName, false, true, loc);
+    }
+
+    // TODO: TupleAccessExpr not in current grammar
+    // @Override
+    // public Expression visitTupleAccessExpr(FireflyParser.TupleAccessExprContext ctx) {
+    //     ...
+    // }
+    
+    @Override
     public Expression visitClassLiteralExpr(FireflyParser.ClassLiteralExprContext ctx) {
         SourceLocation loc = getLocation(ctx);
         Expression object = (Expression) visit(ctx.expression());
@@ -275,8 +334,8 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
     @Override
     public Expression visitAwaitExpr(FireflyParser.AwaitExprContext ctx) {
         SourceLocation loc = getLocation(ctx);
-        Expression operand = (Expression) visit(ctx.expression());
-        return new UnaryExpr(UnaryExpr.UnaryOp.AWAIT, operand, loc);
+        Expression future = (Expression) visit(ctx.expression());
+        return new AwaitExpr(future, loc);
     }
     
     @Override
@@ -349,7 +408,20 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
         if (ctx.expression() != null) {
             initializer = (Expression) visit(ctx.expression());
         }
-        return new LetStatement(pattern, initializer, false, loc);
+        
+        // Check if the pattern is a VariablePattern or TypedVariablePattern with mutability flag set
+        boolean isMutable = false;
+        if (pattern instanceof com.firefly.compiler.ast.pattern.TypedVariablePattern) {
+            com.firefly.compiler.ast.pattern.TypedVariablePattern typedPattern =
+                (com.firefly.compiler.ast.pattern.TypedVariablePattern) pattern;
+            isMutable = typedPattern.isMutable();
+        } else if (pattern instanceof com.firefly.compiler.ast.pattern.VariablePattern) {
+            com.firefly.compiler.ast.pattern.VariablePattern varPattern =
+                (com.firefly.compiler.ast.pattern.VariablePattern) pattern;
+            isMutable = varPattern.isMutable();
+        }
+        
+        return new LetStatement(pattern, initializer, isMutable, loc);
     }
     
     @Override
@@ -360,6 +432,8 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
         if (ctx.expression() != null) {
             initializer = (Expression) visit(ctx.expression());
         }
+        
+        // LetMutStmt always creates a mutable binding
         return new LetStatement(pattern, initializer, true, loc);
     }
     
@@ -408,6 +482,59 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
         BlockExpr body = (BlockExpr) visit(ctx.blockExpression());
         return new WhileExpr(condition, body, loc);
     }
+
+    @Override
+    public Expression visitTryExpr(FireflyParser.TryExprContext ctx) {
+        return (Expression) visit(ctx.tryExpression());
+    }
+    
+    @Override
+    public Expression visitTryExpression(FireflyParser.TryExpressionContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+        
+        // Get try block
+        BlockExpr tryBlock = (BlockExpr) visit(ctx.blockExpression());
+        
+        // Get catch clauses
+        List<TryExpr.CatchClause> catchClauses = new ArrayList<>();
+        if (ctx.catchClause() != null) {
+            for (FireflyParser.CatchClauseContext catchCtx : ctx.catchClause()) {
+                catchClauses.add(buildCatchClause(catchCtx));
+            }
+        }
+        
+        // Get finally block if present
+        BlockExpr finallyBlock = null;
+        if (ctx.finallyClause() != null) {
+            finallyBlock = (BlockExpr) visit(ctx.finallyClause().blockExpression());
+        }
+        
+        return new TryExpr(tryBlock, catchClauses, finallyBlock, loc);
+    }
+    
+    private TryExpr.CatchClause buildCatchClause(FireflyParser.CatchClauseContext ctx) {
+        // Get the catch handler block
+        BlockExpr handler = (BlockExpr) visit(ctx.blockExpression());
+        
+        // Get the pattern (e.g., "e: ValidationException" or just "e")
+        Pattern pattern = (Pattern) visit(ctx.pattern());
+        
+        // Extract variable name and exception type
+        String varName = null;
+        Type exceptionType = null;
+        
+        if (pattern instanceof VariablePattern) {
+            // Simple variable pattern: catch (e) { ... }
+            varName = ((VariablePattern) pattern).getName();
+            // Default to Throwable if no type specified
+            exceptionType = new NamedType("Throwable");
+        } else {
+            // For now, just handle as a wildcard
+            // TODO: Handle more complex patterns
+        }
+        
+        return new TryExpr.CatchClause(varName, exceptionType, handler);
+    }
     
     @Override
     public Expression visitReturnExpr(FireflyParser.ReturnExprContext ctx) {
@@ -429,6 +556,13 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
     public Expression visitContinueExpr(FireflyParser.ContinueExprContext ctx) {
         SourceLocation loc = getLocation(ctx);
         return new ContinueExpr(loc);
+    }
+    
+    @Override
+    public Expression visitThrowExpr(FireflyParser.ThrowExprContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+        Expression exception = (Expression) visit(ctx.expression());
+        return new ThrowExpr(exception, loc);
     }
     
     @Override
@@ -499,50 +633,127 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
     @Override
     public Expression visitPrimaryExpression(FireflyParser.PrimaryExpressionContext ctx) {
         SourceLocation loc = getLocation(ctx);
-        
+
         if (ctx.literal() != null) {
             return (Expression) visit(ctx.literal());
         }
-        
+
         if (ctx.IDENTIFIER() != null) {
             return new IdentifierExpr(ctx.IDENTIFIER().getText(), loc);
         }
+
+        // Handle 'new' expressions: new ArrayList()
+        if (ctx.NEW() != null && ctx.TYPE_IDENTIFIER() != null) {
+            String className = ctx.TYPE_IDENTIFIER().getText();
+            Type type = new NamedType(className);
+
+            List<Expression> arguments = new ArrayList<>();
+            if (ctx.argumentList() != null) {
+                arguments = ctx.argumentList().expression().stream()
+                    .map(argCtx -> (Expression) visit(argCtx))
+                    .collect(Collectors.toList());
+            }
+
+            return new NewExpr(type, arguments, loc);
+        }
         
+        // TODO: spawn not in current grammar
+        // if (ctx.SPAWN() != null) { ... }
+
         if (ctx.TYPE_IDENTIFIER() != null) {
             // Allow TYPE_IDENTIFIER as expression (for Class.class literals)
             return new IdentifierExpr(ctx.TYPE_IDENTIFIER().getText(), loc);
         }
-        
+
         if (ctx.expression() != null) {
             // Parenthesized expression
             return (Expression) visit(ctx.expression());
         }
-        
+
         if (ctx.getText().equals("self")) {
             return new IdentifierExpr("self", loc);
         }
-        
+
         if (ctx.arrayLiteral() != null) {
             return (Expression) visit(ctx.arrayLiteral());
         }
+
+        if (ctx.tupleLiteral() != null) {
+            return (Expression) visit(ctx.tupleLiteral());
+        }
         
-        // TODO: Handle map literals, tuple literals, struct literals
+        if (ctx.structLiteral() != null) {
+            return (Expression) visit(ctx.structLiteral());
+        }
         
+        if (ctx.mapLiteral() != null) {
+            return (Expression) visit(ctx.mapLiteral());
+        }
+        
+        // Lambda expressions are now at expression level, not primary expression
+
         throw new RuntimeException("Unknown primary expression: " + ctx.getText());
     }
     
     @Override
     public Expression visitArrayLiteral(FireflyParser.ArrayLiteralContext ctx) {
         SourceLocation loc = getLocation(ctx);
-        
+
         List<Expression> elements = new ArrayList<>();
         if (ctx.expression() != null) {
             elements = ctx.expression().stream()
                 .map(exprCtx -> (Expression) visit(exprCtx))
                 .collect(Collectors.toList());
         }
-        
+
         return new ArrayLiteralExpr(elements, loc);
+    }
+
+    @Override
+    public Expression visitTupleLiteral(FireflyParser.TupleLiteralContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+
+        List<Expression> elements = ctx.expression().stream()
+            .map(exprCtx -> (Expression) visit(exprCtx))
+            .collect(Collectors.toList());
+
+        return new TupleLiteralExpr(elements, loc);
+    }
+    
+    @Override
+    public Expression visitStructLiteral(FireflyParser.StructLiteralContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+        
+        String structName = ctx.TYPE_IDENTIFIER().getText();
+        
+        List<StructLiteralExpr.FieldInit> fieldInits = new ArrayList<>();
+        if (ctx.structLiteralField() != null) {
+            for (FireflyParser.StructLiteralFieldContext fieldCtx : ctx.structLiteralField()) {
+                String fieldName = fieldCtx.IDENTIFIER().getText();
+                Expression value;
+                
+                if (fieldCtx.expression() != null) {
+                    // Explicit value: x: 10
+                    value = (Expression) visit(fieldCtx.expression());
+                } else {
+                    // Shorthand: x (implies x: x)
+                    value = new IdentifierExpr(fieldName, loc);
+                }
+                
+                fieldInits.add(new StructLiteralExpr.FieldInit(fieldName, value));
+            }
+        }
+        
+        return new StructLiteralExpr(structName, fieldInits, loc);
+    }
+    
+    @Override
+    public Expression visitMapLiteral(FireflyParser.MapLiteralContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+        
+        Map<Expression, Expression> entries = new java.util.LinkedHashMap<>();
+        // For now, return empty map literal. Full implementation depends on grammar structure.
+        return new MapLiteralExpr(entries, loc);
     }
     
     @Override
@@ -616,6 +827,22 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
     }
     
     @Override
+    public Pattern visitTypedVariablePattern(FireflyParser.TypedVariablePatternContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+        String name = ctx.IDENTIFIER().getText();
+        Type type = (Type) visit(ctx.type());
+        return new com.firefly.compiler.ast.pattern.TypedVariablePattern(name, type, false, loc);
+    }
+    
+    @Override
+    public Pattern visitTypedMutableVariablePattern(FireflyParser.TypedMutableVariablePatternContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+        String name = ctx.IDENTIFIER().getText();
+        Type type = (Type) visit(ctx.type());
+        return new com.firefly.compiler.ast.pattern.TypedVariablePattern(name, type, true, loc);
+    }
+    
+    @Override
     public Pattern visitLiteralPattern(FireflyParser.LiteralPatternContext ctx) {
         SourceLocation loc = getLocation(ctx);
         LiteralExpr literal = (LiteralExpr) visit(ctx.literal());
@@ -627,6 +854,84 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
         SourceLocation loc = getLocation(ctx);
         return new com.firefly.compiler.ast.pattern.WildcardPattern(loc);
     }
+
+    @Override
+    public Pattern visitTuplePattern(FireflyParser.TuplePatternContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+        List<Pattern> elements = new ArrayList<>();
+        for (FireflyParser.PatternContext patternCtx : ctx.pattern()) {
+            elements.add((Pattern) visit(patternCtx));
+        }
+        return new com.firefly.compiler.ast.pattern.TuplePattern(elements, loc);
+    }
+
+    @Override
+    public Pattern visitArrayPattern(FireflyParser.ArrayPatternContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+        List<Pattern> elements = new ArrayList<>();
+        for (FireflyParser.PatternContext patternCtx : ctx.pattern()) {
+            elements.add((Pattern) visit(patternCtx));
+        }
+        return new com.firefly.compiler.ast.pattern.ArrayPattern(elements, false, loc);
+    }
+
+    @Override
+    public Pattern visitArrayRestPattern(FireflyParser.ArrayRestPatternContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+        List<Pattern> elements = new ArrayList<>();
+        // ArrayRestPattern has only one pattern element: [pattern, ..]
+        if (ctx.pattern() != null) {
+            elements.add((Pattern) visit(ctx.pattern()));
+        }
+        return new com.firefly.compiler.ast.pattern.ArrayPattern(elements, true, loc);
+    }
+
+    @Override
+    public Pattern visitStructPattern(FireflyParser.StructPatternContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+        String typeName = ctx.TYPE_IDENTIFIER().getText();
+        List<com.firefly.compiler.ast.pattern.StructPattern.FieldPattern> fields =
+            ctx.fieldPattern().stream()
+                .map(this::buildFieldPattern)
+                .collect(Collectors.toList());
+        return new com.firefly.compiler.ast.pattern.StructPattern(typeName, fields, loc);
+    }
+
+    private com.firefly.compiler.ast.pattern.StructPattern.FieldPattern buildFieldPattern(
+            FireflyParser.FieldPatternContext ctx) {
+        String fieldName = ctx.IDENTIFIER().getText();
+        Pattern pattern = null;
+        if (ctx.pattern() != null) {
+            pattern = (Pattern) visit(ctx.pattern());
+        }
+        return new com.firefly.compiler.ast.pattern.StructPattern.FieldPattern(fieldName, pattern);
+    }
+
+    @Override
+    public Pattern visitOrPattern(FireflyParser.OrPatternContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+        Pattern left = (Pattern) visit(ctx.pattern(0));
+        Pattern right = (Pattern) visit(ctx.pattern(1));
+        return new com.firefly.compiler.ast.pattern.OrPattern(left, right, loc);
+    }
+
+    // TODO: ConstructorPattern not in current grammar
+    // @Override
+    // public Pattern visitConstructorPattern(FireflyParser.ConstructorPatternContext ctx) {
+    //     ...
+    // }
+
+    @Override
+    public Pattern visitTupleStructPattern(FireflyParser.TupleStructPatternContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+        String typeName = ctx.TYPE_IDENTIFIER().getText();
+        List<Pattern> patterns = ctx.pattern().stream()
+            .map(p -> (Pattern) visit(p))
+            .collect(Collectors.toList());
+        return new com.firefly.compiler.ast.pattern.TupleStructPattern(typeName, patterns, loc);
+    }
+
+    // Handle lambda expressions (simplified single-parameter version)
     
     @Override
     public Expression visitLambdaExpr(FireflyParser.LambdaExprContext ctx) {
@@ -637,15 +942,15 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
     public Expression visitLambdaExpression(FireflyParser.LambdaExpressionContext ctx) {
         SourceLocation loc = getLocation(ctx);
         
-        // Extract parameter names
+        // Parse parameter list
         List<String> parameters = new ArrayList<>();
-        if (ctx.parameterList() != null) {
-            parameters = ctx.parameterList().parameter().stream()
-                .map(param -> param.IDENTIFIER().getText())
-                .collect(Collectors.toList());
+        if (ctx.lambdaParameterList() != null) {
+            for (var identifier : ctx.lambdaParameterList().IDENTIFIER()) {
+                parameters.add(identifier.getText());
+            }
         }
         
-        // Lambda body
+        // Parse body
         Expression body;
         if (ctx.expression() != null) {
             body = (Expression) visit(ctx.expression());
@@ -654,6 +959,11 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
         }
         
         return new LambdaExpr(parameters, body, loc);
+    }
+
+    private String getParameterName(FireflyParser.ParameterContext ctx) {
+        // Grammar: parameter = IDENTIFIER ':' type | 'mut' IDENTIFIER ':' type | 'using' IDENTIFIER
+        return ctx.IDENTIFIER().getText();
     }
     
     @Override
@@ -697,16 +1007,14 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
     @Override
     public FunctionDecl visitFunctionDeclaration(FireflyParser.FunctionDeclarationContext ctx) {
         SourceLocation loc = getLocation(ctx);
-        
+
         String name = ctx.IDENTIFIER().getText();
         boolean isAsync = ctx.ASYNC() != null;
-        
-        // Type parameters
-        List<String> typeParameters = new ArrayList<>();
+
+        // Type parameters with bounds support
+        List<TypeParameter> typeParameters = new ArrayList<>();
         if (ctx.typeParameters() != null) {
-            typeParameters = ctx.typeParameters().TYPE_IDENTIFIER().stream()
-                .map(TerminalNode::getText)
-                .collect(Collectors.toList());
+            typeParameters = parseTypeParameters(ctx.typeParameters());
         }
         
         // Parameters
@@ -730,29 +1038,56 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
         } else {
             body = (Expression) visit(ctx.blockExpression());
         }
-        
-        return new FunctionDecl(name, parameters, returnType, body, isAsync, typeParameters, loc);
+
+        return new FunctionDecl(name, parameters, returnType, body, isAsync, typeParameters, List.of(), loc);
     }
+
+    /**
+     * Parse type parameters.
+     * Grammar: '<' TYPE_IDENTIFIER (',' TYPE_IDENTIFIER)* '>'
+     */
+    private List<TypeParameter> parseTypeParameters(FireflyParser.TypeParametersContext ctx) {
+        List<TypeParameter> typeParams = new ArrayList<>();
+        SourceLocation loc = getLocation(ctx);
+
+        for (var typeIdNode : ctx.TYPE_IDENTIFIER()) {
+            String paramName = typeIdNode.getText();
+            // No bounds in current grammar
+            typeParams.add(new TypeParameter(paramName, List.of(), loc));
+        }
+
+        return typeParams;
+    }
+
+
     
     private FunctionDecl.Parameter buildParameter(FireflyParser.ParameterContext ctx) {
         String name = ctx.IDENTIFIER().getText();
-        Type type = (Type) visit(ctx.type());
+        Type type;
+        boolean isVararg = false;
         boolean isMutable = ctx.MUT() != null;
-        
         java.util.Optional<Expression> defaultValue = java.util.Optional.empty();
-        if (ctx.expression() != null) {
-            defaultValue = java.util.Optional.of((Expression) visit(ctx.expression()));
-        }
-        
-        // Extract parameter annotations
         List<Annotation> annotations = new ArrayList<>();
+        
+        // Parse annotations
         if (ctx.annotation() != null) {
             annotations = ctx.annotation().stream()
                 .map(this::buildAnnotation)
                 .collect(Collectors.toList());
         }
         
-        return new FunctionDecl.Parameter(name, type, defaultValue, isMutable, annotations);
+        // Check for 'using' parameter
+        if (ctx.USING() != null) {
+            type = new NamedType("Any"); // Placeholder type for using parameters
+        } else {
+            // Regular or mutable parameter
+            type = (Type) visit(ctx.type());
+            if (ctx.expression() != null) {
+                defaultValue = java.util.Optional.of((Expression) visit(ctx.expression()));
+            }
+        }
+
+        return new FunctionDecl.Parameter(name, type, defaultValue, isMutable, isVararg, annotations);
     }
     
     @Override
@@ -760,12 +1095,13 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
         SourceLocation loc = getLocation(ctx);
         
         String name = ctx.TYPE_IDENTIFIER().getText();
-        
+
         // Type parameters
         List<String> typeParameters = new ArrayList<>();
         if (ctx.typeParameters() != null) {
+            // ClassDecl uses List<String> for type parameters
             typeParameters = ctx.typeParameters().TYPE_IDENTIFIER().stream()
-                .map(TerminalNode::getText)
+                .map(node -> node.getText())
                 .collect(Collectors.toList());
         }
         
@@ -790,6 +1126,14 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
         List<ClassDecl.FieldDecl> fields = new ArrayList<>();
         List<ClassDecl.MethodDecl> methods = new ArrayList<>();
         java.util.Optional<ClassDecl.ConstructorDecl> constructor = java.util.Optional.empty();
+        java.util.Optional<ClassDecl.FlyDecl> flyDeclaration = java.util.Optional.empty();
+        
+        // Nested declarations
+        List<ClassDecl> nestedClasses = new ArrayList<>();
+        List<InterfaceDecl> nestedInterfaces = new ArrayList<>();
+        List<SparkDecl> nestedSparks = new ArrayList<>();
+        List<StructDecl> nestedStructs = new ArrayList<>();
+        List<DataDecl> nestedData = new ArrayList<>();
         
         for (FireflyParser.ClassMemberContext member : ctx.classMember()) {
             if (member.fieldDeclaration() != null) {
@@ -798,10 +1142,24 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
                 methods.add(buildMethodDeclaration(member.methodDeclaration()));
             } else if (member.constructorDeclaration() != null) {
                 constructor = java.util.Optional.of(buildConstructorDeclaration(member.constructorDeclaration()));
+            } else if (member.flyDeclaration() != null) {
+                flyDeclaration = java.util.Optional.of(buildFlyDeclaration(member.flyDeclaration()));
+            } else if (member.nestedClassDeclaration() != null) {
+                nestedClasses.add(buildNestedClassDeclaration(member.nestedClassDeclaration(), name));
+            } else if (member.nestedInterfaceDeclaration() != null) {
+                nestedInterfaces.add(buildNestedInterfaceDeclaration(member.nestedInterfaceDeclaration()));
+            } else if (member.nestedSparkDeclaration() != null) {
+                nestedSparks.add(buildNestedSparkDeclaration(member.nestedSparkDeclaration()));
+            } else if (member.nestedStructDeclaration() != null) {
+                nestedStructs.add(buildNestedStructDeclaration(member.nestedStructDeclaration()));
+            } else if (member.nestedDataDeclaration() != null) {
+                nestedData.add(buildNestedDataDeclaration(member.nestedDataDeclaration()));
             }
         }
         
-        return new ClassDecl(name, typeParameters, superClass, interfaces, fields, methods, constructor, annotations, loc);
+        return new ClassDecl(name, typeParameters, superClass, interfaces, fields, methods, constructor, flyDeclaration, 
+                           annotations, nestedClasses, nestedInterfaces, nestedSparks, nestedStructs, nestedData, 
+                           false, false, null, loc);
     }
     
     private ClassDecl.FieldDecl buildFieldDeclaration(FireflyParser.FieldDeclarationContext ctx) {
@@ -821,21 +1179,24 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
                 .collect(Collectors.toList());
         }
         
-        return new ClassDecl.FieldDecl(name, type, isMutable, initializer, annotations);
+        // Parse visibility
+        ClassDecl.Visibility visibility = parseVisibility(ctx.visibility());
+        
+        return new ClassDecl.FieldDecl(name, type, isMutable, initializer, annotations, visibility);
     }
     
     private ClassDecl.MethodDecl buildMethodDeclaration(FireflyParser.MethodDeclarationContext ctx) {
         String name = ctx.IDENTIFIER().getText();
         boolean isAsync = ctx.ASYNC() != null;
-        
-        // Type parameters
+
+        // Type parameters - ClassDecl.MethodDecl uses List<String>
         List<String> typeParameters = new ArrayList<>();
         if (ctx.typeParameters() != null) {
             typeParameters = ctx.typeParameters().TYPE_IDENTIFIER().stream()
-                .map(TerminalNode::getText)
+                .map(node -> node.getText())
                 .collect(Collectors.toList());
         }
-        
+
         // Parameters
         List<FunctionDecl.Parameter> parameters = new ArrayList<>();
         if (ctx.parameterList() != null) {
@@ -843,16 +1204,16 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
                 .map(this::buildParameter)
                 .collect(Collectors.toList());
         }
-        
+
         // Return type
         java.util.Optional<Type> returnType = java.util.Optional.empty();
         if (ctx.type() != null) {
             returnType = java.util.Optional.of((Type) visit(ctx.type()));
         }
-        
+
         // Body
         Expression body = (Expression) visit(ctx.blockExpression());
-        
+
         // Annotations
         List<Annotation> annotations = new ArrayList<>();
         if (ctx.annotation() != null) {
@@ -861,7 +1222,10 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
                 .collect(Collectors.toList());
         }
         
-        return new ClassDecl.MethodDecl(name, typeParameters, parameters, returnType, body, isAsync, annotations);
+        // Parse visibility
+        ClassDecl.Visibility visibility = parseVisibility(ctx.visibility());
+
+        return new ClassDecl.MethodDecl(name, typeParameters, parameters, returnType, body, isAsync, annotations, visibility);
     }
     
     private ClassDecl.ConstructorDecl buildConstructorDeclaration(FireflyParser.ConstructorDeclarationContext ctx) {
@@ -884,13 +1248,226 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
                 .collect(Collectors.toList());
         }
         
-        return new ClassDecl.ConstructorDecl(parameters, body, annotations);
+        // Parse visibility
+        ClassDecl.Visibility visibility = parseVisibility(ctx.visibility());
+        
+        return new ClassDecl.ConstructorDecl(parameters, body, annotations, visibility);
+    }
+    
+    private ClassDecl.FlyDecl buildFlyDeclaration(FireflyParser.FlyDeclarationContext ctx) {
+        // Parameters (should be just 'args: [String]')
+        List<FunctionDecl.Parameter> parameters = new ArrayList<>();
+        // The grammar enforces 'args: [String]', so we create this parameter
+        Type stringArrayType = new ArrayType(new PrimitiveType("String"));
+        FunctionDecl.Parameter argsParam = new FunctionDecl.Parameter(
+            "args", stringArrayType, java.util.Optional.empty(), false, false, new ArrayList<>()
+        );
+        parameters.add(argsParam);
+        
+        // Return type
+        java.util.Optional<Type> returnType = java.util.Optional.empty();
+        if (ctx.type() != null) {
+            returnType = java.util.Optional.of((Type) visit(ctx.type()));
+        }
+        
+        // Body
+        Expression body = (Expression) visit(ctx.blockExpression());
+        
+        // Annotations
+        List<Annotation> annotations = new ArrayList<>();
+        if (ctx.annotation() != null) {
+            annotations = ctx.annotation().stream()
+                .map(this::buildAnnotation)
+                .collect(Collectors.toList());
+        }
+        
+        return new ClassDecl.FlyDecl(parameters, returnType, body, annotations);
+    }
+    
+    private ClassDecl.Visibility parseVisibility(FireflyParser.VisibilityContext ctx) {
+        if (ctx == null) {
+            return ClassDecl.Visibility.PRIVATE; // Default visibility
+        }
+        
+        String visibilityText = ctx.getText();
+        if ("pub".equals(visibilityText)) {
+            return ClassDecl.Visibility.PUBLIC;
+        } else if ("priv".equals(visibilityText)) {
+            return ClassDecl.Visibility.PRIVATE;
+        }
+        
+        return ClassDecl.Visibility.PRIVATE; // Default
+    }
+    
+    // ========== Nested Declaration Builders ==========
+    
+    private ClassDecl buildNestedClassDeclaration(FireflyParser.NestedClassDeclarationContext ctx, String enclosingClassName) {
+        SourceLocation loc = getLocation(ctx);
+        String name = ctx.TYPE_IDENTIFIER().getText();
+        boolean isStatic = ctx.STATIC() != null;
+        
+        // Type parameters
+        List<String> typeParameters = new ArrayList<>();
+        if (ctx.typeParameters() != null) {
+            typeParameters = ctx.typeParameters().TYPE_IDENTIFIER().stream()
+                .map(node -> node.getText())
+                .collect(Collectors.toList());
+        }
+        
+        // Superclass
+        java.util.Optional<Type> superClass = java.util.Optional.empty();
+        if (ctx.type() != null && ctx.EXTENDS() != null) {
+            superClass = java.util.Optional.of((Type) visit(ctx.type()));
+        }
+        
+        // Interfaces
+        List<Type> interfaces = new ArrayList<>();
+        if (ctx.typeList() != null) {
+            interfaces = ctx.typeList().type().stream()
+                .map(typeCtx -> (Type) visit(typeCtx))
+                .collect(Collectors.toList());
+        }
+        
+        // Annotations
+        List<Annotation> annotations = new ArrayList<>();
+        if (ctx.annotation() != null) {
+            annotations = ctx.annotation().stream()
+                .map(this::buildAnnotation)
+                .collect(Collectors.toList());
+        }
+        
+        // Parse class members recursively
+        List<ClassDecl.FieldDecl> fields = new ArrayList<>();
+        List<ClassDecl.MethodDecl> methods = new ArrayList<>();
+        java.util.Optional<ClassDecl.ConstructorDecl> constructor = java.util.Optional.empty();
+        java.util.Optional<ClassDecl.FlyDecl> flyDeclaration = java.util.Optional.empty();
+        
+        List<ClassDecl> nestedClasses = new ArrayList<>();
+        List<InterfaceDecl> nestedInterfaces = new ArrayList<>();
+        List<SparkDecl> nestedSparks = new ArrayList<>();
+        List<StructDecl> nestedStructs = new ArrayList<>();
+        List<DataDecl> nestedData = new ArrayList<>();
+        
+        for (FireflyParser.ClassMemberContext member : ctx.classMember()) {
+            if (member.fieldDeclaration() != null) {
+                fields.add(buildFieldDeclaration(member.fieldDeclaration()));
+            } else if (member.methodDeclaration() != null) {
+                methods.add(buildMethodDeclaration(member.methodDeclaration()));
+            } else if (member.constructorDeclaration() != null) {
+                constructor = java.util.Optional.of(buildConstructorDeclaration(member.constructorDeclaration()));
+            } else if (member.nestedClassDeclaration() != null) {
+                nestedClasses.add(buildNestedClassDeclaration(member.nestedClassDeclaration(), enclosingClassName + "$" + name));
+            } else if (member.nestedInterfaceDeclaration() != null) {
+                nestedInterfaces.add(buildNestedInterfaceDeclaration(member.nestedInterfaceDeclaration()));
+            } else if (member.nestedSparkDeclaration() != null) {
+                nestedSparks.add(buildNestedSparkDeclaration(member.nestedSparkDeclaration()));
+            } else if (member.nestedStructDeclaration() != null) {
+                nestedStructs.add(buildNestedStructDeclaration(member.nestedStructDeclaration()));
+            } else if (member.nestedDataDeclaration() != null) {
+                nestedData.add(buildNestedDataDeclaration(member.nestedDataDeclaration()));
+            }
+        }
+        
+        return new ClassDecl(name, typeParameters, superClass, interfaces, fields, methods, constructor, flyDeclaration,
+                           annotations, nestedClasses, nestedInterfaces, nestedSparks, nestedStructs, nestedData,
+                           isStatic, true, enclosingClassName, loc);
+    }
+    
+    private InterfaceDecl buildNestedInterfaceDeclaration(FireflyParser.NestedInterfaceDeclarationContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+        String name = ctx.TYPE_IDENTIFIER().getText();
+        
+        // Type parameters
+        List<String> typeParameters = new ArrayList<>();
+        if (ctx.typeParameters() != null) {
+            typeParameters = ctx.typeParameters().TYPE_IDENTIFIER().stream()
+                .map(node -> node.getText())
+                .collect(Collectors.toList());
+        }
+        
+        // Super interfaces
+        List<Type> superInterfaces = new ArrayList<>();
+        if (ctx.typeList() != null) {
+            superInterfaces = ctx.typeList().type().stream()
+                .map(typeCtx -> (Type) visit(typeCtx))
+                .collect(Collectors.toList());
+        }
+        
+        // Annotations
+        List<Annotation> annotations = new ArrayList<>();
+        if (ctx.annotation() != null) {
+            annotations = ctx.annotation().stream()
+                .map(this::buildAnnotation)
+                .collect(Collectors.toList());
+        }
+        
+        // Method signatures
+        List<TraitDecl.FunctionSignature> methods = ctx.interfaceMember().stream()
+            .map(member -> buildFunctionSignature(member.functionSignature()))
+            .collect(Collectors.toList());
+        
+        return new InterfaceDecl(name, typeParameters, superInterfaces, methods, annotations, loc);
+    }
+    
+    private SparkDecl buildNestedSparkDeclaration(FireflyParser.NestedSparkDeclarationContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+        String name = ctx.TYPE_IDENTIFIER().getText();
+        
+        // Type parameters
+        List<TypeParameter> typeParameters = new ArrayList<>();
+        if (ctx.typeParameters() != null) {
+            typeParameters = parseTypeParameters(ctx.typeParameters());
+        }
+        
+        // Parse spark members (delegate to existing spark visitor)
+        // For now, return a basic spark - full implementation would parse all members
+        return new SparkDecl(name, typeParameters, new ArrayList<>(), java.util.Optional.empty(),
+                           java.util.Optional.empty(), java.util.Optional.empty(),
+                           new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), loc);
+    }
+    
+    private StructDecl buildNestedStructDeclaration(FireflyParser.NestedStructDeclarationContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+        String name = ctx.TYPE_IDENTIFIER().getText();
+        
+        // Type parameters
+        List<TypeParameter> typeParameters = new ArrayList<>();
+        if (ctx.typeParameters() != null) {
+            typeParameters = parseTypeParameters(ctx.typeParameters());
+        }
+        
+        // Fields (use correct inner class name: StructDecl.Field)
+        List<StructDecl.Field> fields = ctx.structField().stream()
+            .map(this::buildStructField)
+            .collect(Collectors.toList());
+        
+        return new StructDecl(name, typeParameters, fields, loc);
+    }
+    
+    private DataDecl buildNestedDataDeclaration(FireflyParser.NestedDataDeclarationContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+        String name = ctx.TYPE_IDENTIFIER().getText();
+        
+        // Type parameters
+        List<TypeParameter> typeParameters = new ArrayList<>();
+        if (ctx.typeParameters() != null) {
+            typeParameters = parseTypeParameters(ctx.typeParameters());
+        }
+        
+        // Variants
+        List<DataDecl.Variant> variants = ctx.dataVariant().stream()
+            .map(this::buildDataVariant)
+            .collect(Collectors.toList());
+        
+        return new DataDecl(name, typeParameters, variants, loc);
     }
     
     private Annotation buildAnnotation(FireflyParser.AnnotationContext ctx) {
         SourceLocation loc = getLocation(ctx);
-        String name = ctx.qualifiedTypeName().getText();
-        
+        // Convert Firefly-style :: to Java-style . for annotations
+        // e.g., @org::springframework::web::bind::annotation::RestController -> @org.springframework.web.bind.annotation.RestController
+        String name = ctx.qualifiedTypeName().getText().replace("::", ".");
+
         // Parse annotation arguments
         Map<String, Object> arguments = new java.util.HashMap<>();
         if (ctx.annotationArguments() != null) {
@@ -898,17 +1475,26 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
                 if (argCtx.IDENTIFIER() != null) {
                     // Named argument: name = value
                     String argName = argCtx.IDENTIFIER().getText();
-                    Object value = extractLiteralValue(argCtx.literal());
+                    Object value = extractAnnotationValue(argCtx.annotationValue());
                     arguments.put(argName, value);
                 } else {
                     // Positional argument (becomes "value")
-                    Object value = extractLiteralValue(argCtx.literal());
+                    Object value = extractAnnotationValue(argCtx.annotationValue());
                     arguments.put("value", value);
                 }
             }
         }
-        
+
         return new Annotation(name, arguments, loc);
+    }
+    
+    private Object extractAnnotationValue(FireflyParser.AnnotationValueContext ctx) {
+        if (ctx.literal() != null) {
+            return extractLiteralValue(ctx.literal());
+        } else if (ctx.TYPE_IDENTIFIER() != null) {
+            return ctx.TYPE_IDENTIFIER().getText();
+        }
+        return null;
     }
     
     private Object extractLiteralValue(FireflyParser.LiteralContext ctx) {
@@ -932,12 +1518,12 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
         SourceLocation loc = getLocation(ctx);
         
         String name = ctx.TYPE_IDENTIFIER().getText();
-        
-        // Type parameters
+
+        // Type parameters - InterfaceDecl uses List<String>
         List<String> typeParameters = new ArrayList<>();
         if (ctx.typeParameters() != null) {
             typeParameters = ctx.typeParameters().TYPE_IDENTIFIER().stream()
-                .map(TerminalNode::getText)
+                .map(node -> node.getText())
                 .collect(Collectors.toList());
         }
         
@@ -960,25 +1546,29 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
         return new InterfaceDecl(name, typeParameters, superInterfaces, methods, annotations, loc);
     }
     
+    // TODO: Actor declarations not in current grammar
+    // @Override
+    // public ActorDecl visitActorDeclaration(FireflyParser.ActorDeclarationContext ctx) {
+    //     ...
+    // }
+    
     @Override
     public StructDecl visitStructDeclaration(FireflyParser.StructDeclarationContext ctx) {
         SourceLocation loc = getLocation(ctx);
-        
+
         String name = ctx.TYPE_IDENTIFIER().getText();
-        
-        // Type parameters
-        List<String> typeParameters = new ArrayList<>();
+
+        // Type parameters with bounds support
+        List<TypeParameter> typeParameters = new ArrayList<>();
         if (ctx.typeParameters() != null) {
-            typeParameters = ctx.typeParameters().TYPE_IDENTIFIER().stream()
-                .map(TerminalNode::getText)
-                .collect(Collectors.toList());
+            typeParameters = parseTypeParameters(ctx.typeParameters());
         }
-        
+
         // Fields
         List<StructDecl.Field> fields = ctx.structField().stream()
             .map(this::buildStructField)
             .collect(Collectors.toList());
-        
+
         return new StructDecl(name, typeParameters, fields, loc);
     }
     
@@ -995,24 +1585,152 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
     }
     
     @Override
-    public DataDecl visitDataDeclaration(FireflyParser.DataDeclarationContext ctx) {
+    public SparkDecl visitSparkDeclaration(FireflyParser.SparkDeclarationContext ctx) {
         SourceLocation loc = getLocation(ctx);
         
         String name = ctx.TYPE_IDENTIFIER().getText();
         
-        // Type parameters
-        List<String> typeParameters = new ArrayList<>();
+        // Type parameters with bounds support
+        List<TypeParameter> typeParameters = new ArrayList<>();
         if (ctx.typeParameters() != null) {
-            typeParameters = ctx.typeParameters().TYPE_IDENTIFIER().stream()
-                .map(TerminalNode::getText)
+            typeParameters = parseTypeParameters(ctx.typeParameters());
+        }
+        
+        // Fields
+        List<SparkDecl.SparkField> fields = new ArrayList<>();
+        // Validation block
+        java.util.Optional<SparkDecl.ValidationBlock> validateBlock = java.util.Optional.empty();
+        // Before hook
+        java.util.Optional<SparkDecl.BeforeHook> beforeHook = java.util.Optional.empty();
+        // After hook
+        java.util.Optional<SparkDecl.AfterHook> afterHook = java.util.Optional.empty();
+        // Computed properties
+        List<SparkDecl.ComputedProperty> computedProperties = new ArrayList<>();
+        // Methods
+        List<FunctionDecl> methods = new ArrayList<>();
+        
+        if (ctx.sparkMember() != null) {
+            for (FireflyParser.SparkMemberContext member : ctx.sparkMember()) {
+                if (member.sparkField() != null) {
+                    fields.add(buildSparkField(member.sparkField()));
+                } else if (member.sparkMethod() != null) {
+                    methods.add(buildSparkMethod(member.sparkMethod()));
+                } else if (member.validateBlock() != null) {
+                    BlockExpr body = (BlockExpr) visit(member.validateBlock().blockExpression());
+                    validateBlock = java.util.Optional.of(new SparkDecl.ValidationBlock(body));
+                } else if (member.beforeHook() != null) {
+                    BlockExpr body = (BlockExpr) visit(member.beforeHook().blockExpression());
+                    beforeHook = java.util.Optional.of(new SparkDecl.BeforeHook(body));
+                } else if (member.afterHook() != null) {
+                    String oldParam = member.afterHook().IDENTIFIER(0).getText();
+                    String newParam = member.afterHook().IDENTIFIER(1).getText();
+                    BlockExpr body = (BlockExpr) visit(member.afterHook().blockExpression());
+                    afterHook = java.util.Optional.of(new SparkDecl.AfterHook(oldParam, newParam, body));
+                } else if (member.computedProperty() != null) {
+                    String propName = member.computedProperty().IDENTIFIER().getText();
+                    Type propType = (Type) visit(member.computedProperty().type());
+                    BlockExpr body = (BlockExpr) visit(member.computedProperty().blockExpression());
+                    computedProperties.add(new SparkDecl.ComputedProperty(propName, propType, body));
+                }
+            }
+        }
+        
+        // Annotations from parent topLevelDeclaration
+        List<Annotation> annotations = new ArrayList<>(currentAnnotations);
+        
+        return new SparkDecl(
+            name,
+            typeParameters,
+            fields,
+            validateBlock,
+            beforeHook,
+            afterHook,
+            computedProperties,
+            methods,
+            annotations,
+            loc
+        );
+    }
+    
+    private SparkDecl.SparkField buildSparkField(FireflyParser.SparkFieldContext ctx) {
+        String name = ctx.IDENTIFIER().getText();
+        Type type = (Type) visit(ctx.type());
+        
+        java.util.Optional<Expression> defaultValue = java.util.Optional.empty();
+        if (ctx.expression() != null) {
+            defaultValue = java.util.Optional.of((Expression) visit(ctx.expression()));
+        }
+        
+        // Parse field-level annotations
+        List<Annotation> fieldAnnotations = new ArrayList<>();
+        if (ctx.annotation() != null) {
+            fieldAnnotations = ctx.annotation().stream()
+                .map(this::buildAnnotation)
                 .collect(Collectors.toList());
         }
         
+        return new SparkDecl.SparkField(name, type, defaultValue, fieldAnnotations);
+    }
+    
+    private FunctionDecl buildSparkMethod(FireflyParser.SparkMethodContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+        String name = ctx.IDENTIFIER().getText();
+        
+        // Type parameters
+        List<TypeParameter> typeParameters = new ArrayList<>();
+        if (ctx.typeParameters() != null) {
+            typeParameters = parseTypeParameters(ctx.typeParameters());
+        }
+        
+        // Parameters
+        List<FunctionDecl.Parameter> parameters = new ArrayList<>();
+        if (ctx.parameterList() != null) {
+            parameters = ctx.parameterList().parameter().stream()
+                .map(this::buildParameter)
+                .collect(Collectors.toList());
+        }
+        
+        // Return type
+        java.util.Optional<Type> returnType = java.util.Optional.empty();
+        if (ctx.type() != null) {
+            returnType = java.util.Optional.of((Type) visit(ctx.type()));
+        }
+        
+        // Body
+        BlockExpr body = visitBlockExpression(ctx.blockExpression());
+        
+        // FunctionDecl constructor: name, parameters, returnType, body, isAsync, typeParameters, annotations, location
+        return new FunctionDecl(name, parameters, returnType, body, false, typeParameters, new ArrayList<>(), loc);
+    }
+    
+    private List<Annotation> extractAnnotations(org.antlr.v4.runtime.ParserRuleContext ctx) {
+        if (ctx instanceof FireflyParser.TopLevelDeclarationContext) {
+            FireflyParser.TopLevelDeclarationContext topLevel = 
+                (FireflyParser.TopLevelDeclarationContext) ctx;
+            return topLevel.annotation().stream()
+                .map(this::buildAnnotation)
+                .collect(Collectors.toList());
+        }
+        return new ArrayList<>();
+    }
+    
+    @Override
+    public DataDecl visitDataDeclaration(FireflyParser.DataDeclarationContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+
+        String name = ctx.TYPE_IDENTIFIER().getText();
+
+        // Type parameters with bounds support
+        List<TypeParameter> typeParameters = new ArrayList<>();
+        if (ctx.typeParameters() != null) {
+            typeParameters = parseTypeParameters(ctx.typeParameters());
+        }
+
         // Variants
         List<DataDecl.Variant> variants = ctx.dataVariant().stream()
             .map(this::buildDataVariant)
             .collect(Collectors.toList());
-        
+
         return new DataDecl(name, typeParameters, variants, loc);
     }
     
@@ -1043,36 +1761,32 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
     @Override
     public TraitDecl visitTraitDeclaration(FireflyParser.TraitDeclarationContext ctx) {
         SourceLocation loc = getLocation(ctx);
-        
+
         String name = ctx.TYPE_IDENTIFIER().getText();
-        
-        // Type parameters
-        List<String> typeParameters = new ArrayList<>();
+
+        // Type parameters with bounds support
+        List<TypeParameter> typeParameters = new ArrayList<>();
         if (ctx.typeParameters() != null) {
-            typeParameters = ctx.typeParameters().TYPE_IDENTIFIER().stream()
-                .map(TerminalNode::getText)
-                .collect(Collectors.toList());
+            typeParameters = parseTypeParameters(ctx.typeParameters());
         }
-        
+
         // Members (function signatures)
         List<TraitDecl.FunctionSignature> members = ctx.traitMember().stream()
             .map(member -> buildFunctionSignature(member.functionSignature()))
             .collect(Collectors.toList());
-        
+
         return new TraitDecl(name, typeParameters, members, loc);
     }
     
     private TraitDecl.FunctionSignature buildFunctionSignature(FireflyParser.FunctionSignatureContext ctx) {
         String name = ctx.IDENTIFIER().getText();
-        
-        // Type parameters
-        List<String> typeParameters = new ArrayList<>();
+
+        // Type parameters with bounds support
+        List<TypeParameter> typeParameters = new ArrayList<>();
         if (ctx.typeParameters() != null) {
-            typeParameters = ctx.typeParameters().TYPE_IDENTIFIER().stream()
-                .map(TerminalNode::getText)
-                .collect(Collectors.toList());
+            typeParameters = parseTypeParameters(ctx.typeParameters());
         }
-        
+
         // Parameters
         List<FunctionDecl.Parameter> parameters = new ArrayList<>();
         if (ctx.parameterList() != null) {
@@ -1080,39 +1794,105 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
                 .map(this::buildParameter)
                 .collect(Collectors.toList());
         }
-        
+
         // Return type
         Type returnType = (Type) visit(ctx.type());
-        
+
         return new TraitDecl.FunctionSignature(name, typeParameters, parameters, returnType);
     }
     
     @Override
     public ImplDecl visitImplDeclaration(FireflyParser.ImplDeclarationContext ctx) {
         SourceLocation loc = getLocation(ctx);
-        
+
+        // Grammar: 'impl' typeParameters? TYPE_IDENTIFIER ('for' type)? '{' implMember* '}'
         String name = ctx.TYPE_IDENTIFIER().getText();
-        
-        // Type parameters
-        List<String> typeParameters = new ArrayList<>();
-        if (ctx.typeParameters() != null) {
-            typeParameters = ctx.typeParameters().TYPE_IDENTIFIER().stream()
-                .map(TerminalNode::getText)
-                .collect(Collectors.toList());
-        }
-        
-        // For type (optional)
         java.util.Optional<Type> forType = java.util.Optional.empty();
+
+        // Check if 'for' clause is present
         if (ctx.type() != null) {
+            // impl TraitName for TypeName
             forType = java.util.Optional.of((Type) visit(ctx.type()));
         }
-        
+        // else: inherent implementation (impl TypeName)
+
+        // Type parameters with bounds support
+        List<TypeParameter> typeParameters = new ArrayList<>();
+        if (ctx.typeParameters() != null) {
+            typeParameters = parseTypeParameters(ctx.typeParameters());
+        }
+
         // Methods
         List<FunctionDecl> methods = ctx.implMember().stream()
             .map(member -> visitFunctionDeclaration(member.functionDeclaration()))
             .collect(Collectors.toList());
-        
+
         return new ImplDecl(name, typeParameters, forType, methods, loc);
+    }
+    
+    @Override
+    public TypeAliasDecl visitTypeAliasDeclaration(FireflyParser.TypeAliasDeclarationContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+        
+        String name = ctx.TYPE_IDENTIFIER().getText();
+        
+        // Type parameters
+        List<TypeParameter> typeParameters = new ArrayList<>();
+        if (ctx.typeParameters() != null) {
+            typeParameters = parseTypeParameters(ctx.typeParameters());
+        }
+        
+        // Target type
+        Type targetType = (Type) visit(ctx.type());
+        
+        return new TypeAliasDecl(name, typeParameters, targetType, loc);
+    }
+    
+    @Override
+    public ExceptionDecl visitExceptionDeclaration(FireflyParser.ExceptionDeclarationContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+        
+        // Get exception name (first TYPE_IDENTIFIER)
+        String name = ctx.TYPE_IDENTIFIER(0).getText();
+        
+        // Superclass (default to FlyException if not specified)
+        java.util.Optional<String> superException = java.util.Optional.empty();
+        if (ctx.TYPE_IDENTIFIER().size() > 1) {
+            // Second TYPE_IDENTIFIER is the superclass
+            superException = java.util.Optional.of(ctx.TYPE_IDENTIFIER(1).getText());
+        }
+        
+        // Annotations from parent topLevelDeclaration
+        List<Annotation> annotations = new ArrayList<>(currentAnnotations);
+        
+        // Exception members
+        List<FieldDecl> fields = new ArrayList<>();
+        List<ClassDecl.MethodDecl> methods = new ArrayList<>();
+        java.util.Optional<ClassDecl.ConstructorDecl> constructor = java.util.Optional.empty();
+        
+        // Parse exception members (similar to class members)
+        if (ctx.exceptionMember() != null) {
+            for (FireflyParser.ExceptionMemberContext member : ctx.exceptionMember()) {
+                if (member.fieldDeclaration() != null) {
+                    ClassDecl.FieldDecl fieldDecl = buildFieldDeclaration(member.fieldDeclaration());
+                    // Convert ClassDecl.FieldDecl to FieldDecl
+                    fields.add(new FieldDecl(
+                        fieldDecl.getName(),
+                        fieldDecl.getType(),
+                        fieldDecl.isMutable(),
+                        fieldDecl.getInitializer(),
+                        fieldDecl.getAnnotations(),
+                        loc
+                    ));
+                } else if (member.methodDeclaration() != null) {
+                    methods.add(buildMethodDeclaration(member.methodDeclaration()));
+                } else if (member.constructorDeclaration() != null) {
+                    constructor = java.util.Optional.of(buildConstructorDeclaration(member.constructorDeclaration()));
+                }
+            }
+        }
+        
+        return new ExceptionDecl(name, superException, annotations, fields, methods, constructor, loc);
     }
     
     // ============ Types ============
@@ -1126,10 +1906,18 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
             return (Type) visit(ctx.primitiveType());
         }
         
-        // Named type
+        // Named type with optional type arguments
         if (ctx.TYPE_IDENTIFIER() != null) {
             String name = ctx.TYPE_IDENTIFIER().getText();
-            // TODO: Support type arguments when NamedType is updated
+
+            // Check for type arguments (e.g., List<Int>, Map<String, Int>)
+            if (ctx.typeArguments() != null) {
+                List<Type> typeArgs = ctx.typeArguments().type().stream()
+                    .map(typeCtx -> (Type) visit(typeCtx))
+                    .collect(Collectors.toList());
+                return new GenericType(name, typeArgs, loc);
+            }
+
             return new NamedType(name);
         }
         
@@ -1157,14 +1945,28 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
             return new FunctionType(paramTypes, returnType);
         }
         
+        // Tuple type
+        if (ctx.tupleType() != null) {
+            return (Type) visit(ctx.tupleType());
+        }
+
         // Parenthesized type
         if (ctx.type() != null && ctx.type().size() == 1) {
             return (Type) visit(ctx.type(0));
         }
-        
+
         throw new RuntimeException("Unknown type: " + ctx.getText());
     }
-    
+
+    @Override
+    public Type visitTupleType(FireflyParser.TupleTypeContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+        List<Type> elementTypes = ctx.type().stream()
+            .map(typeCtx -> (Type) visit(typeCtx))
+            .collect(Collectors.toList());
+        return new TupleType(elementTypes, loc);
+    }
+
     @Override
     public Type visitPrimitiveType(FireflyParser.PrimitiveTypeContext ctx) {
         String typeName = ctx.getText();

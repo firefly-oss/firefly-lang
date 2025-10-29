@@ -49,6 +49,60 @@ public class MethodResolver {
     }
     
     /**
+     * Resolve the best matching method for an instance call (with Class object).
+     */
+    public Optional<MethodCandidate> resolveInstanceMethod(Class<?> receiverType, String methodName, List<Class<?>> argTypes) {
+        if (receiverType == null) {
+            return Optional.empty();
+        }
+        
+        // Phase 1: Collect all applicable methods
+        List<MethodCandidate> applicableMethods = new ArrayList<>();
+        
+        for (Method method : receiverType.getMethods()) {
+            if (!method.getName().equals(methodName)) {
+                continue;
+            }
+            
+            // Skip static methods for instance calls
+            if (Modifier.isStatic(method.getModifiers())) {
+                continue;
+            }
+            
+            ApplicabilityResult applicability = isApplicable(method, argTypes);
+            if (applicability.applicable) {
+                applicableMethods.add(new MethodCandidate(method, applicability));
+            }
+        }
+        
+        if (applicableMethods.isEmpty()) {
+            return Optional.empty();
+        }
+        
+        // Phase 2: Find most specific method
+        MethodCandidate best = applicableMethods.get(0);
+        
+        for (int i = 1; i < applicableMethods.size(); i++) {
+            MethodCandidate candidate = applicableMethods.get(i);
+            
+            // Compare specificity
+            int comparison = compareSpecificity(best, candidate, argTypes);
+            
+            if (comparison > 0) {
+                // candidate is more specific
+                best = candidate;
+            } else if (comparison == 0) {
+                // Ambiguous - prefer non-varargs over varargs
+                if (!candidate.method.isVarArgs() && best.method.isVarArgs()) {
+                    best = candidate;
+                }
+            }
+        }
+        
+        return Optional.of(best);
+    }
+    
+    /**
      * Core method resolution logic implementing JLS overload resolution.
      */
     private Optional<MethodCandidate> resolveMethod(String className, String methodName, List<Class<?>> argTypes, boolean isStatic) {
@@ -316,11 +370,14 @@ public class MethodResolver {
     
     /**
      * Result of applicability check.
+     *
+     * <p>Contains information about whether a method is applicable for given arguments,
+     * whether it uses varargs, and what conversions are needed.</p>
      */
-    private static class ApplicabilityResult {
-        boolean applicable = false;
-        boolean usesVarargs = false;
-        List<ConversionKind> conversions = new ArrayList<>();
+    public static class ApplicabilityResult {
+        public boolean applicable = false;
+        public boolean usesVarargs = false;
+        public List<ConversionKind> conversions = new ArrayList<>();
     }
     
     /**

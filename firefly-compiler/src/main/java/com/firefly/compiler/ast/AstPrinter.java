@@ -15,7 +15,7 @@ public class AstPrinter implements AstVisitor<String> {
     }
     
     @Override
-    public String visitImportDeclaration(ImportDeclaration decl) {
+    public String visitUseDeclaration(UseDeclaration decl) {
         return "Import: " + decl.getModulePath();
     }
     
@@ -35,8 +35,18 @@ public class AstPrinter implements AstVisitor<String> {
     }
     
     @Override
+    public String visitActorDecl(ActorDecl decl) {
+        return "ActorDecl: " + decl.getName();
+    }
+    
+    @Override
     public String visitStructDecl(StructDecl decl) {
         return "StructDecl";
+    }
+    
+    @Override
+    public String visitSparkDecl(SparkDecl decl) {
+        return "SparkDecl: " + decl.getName();
     }
     
     @Override
@@ -83,7 +93,12 @@ public class AstPrinter implements AstVisitor<String> {
     public String visitFieldAccessExpr(FieldAccessExpr expr) {
         return "FieldAccess: " + expr.getFieldName();
     }
-    
+
+    @Override
+    public String visitTupleAccessExpr(TupleAccessExpr expr) {
+        return "TupleAccess: ." + expr.getIndex();
+    }
+
     @Override
     public String visitIndexAccessExpr(IndexAccessExpr expr) {
         return "IndexAccess";
@@ -116,7 +131,11 @@ public class AstPrinter implements AstVisitor<String> {
     
     @Override
     public String visitLambdaExpr(LambdaExpr expr) {
-        return "LambdaExpr";
+        StringBuilder sb = new StringBuilder("lambda (");
+        sb.append(String.join(", ", expr.getParameters()));
+        sb.append(") -> ");
+        sb.append(expr.getBody().accept(this));
+        return sb.toString();
     }
     
     @Override
@@ -143,7 +162,17 @@ public class AstPrinter implements AstVisitor<String> {
     public String visitContinueExpr(ContinueExpr expr) {
         return "ContinueExpr";
     }
-    
+
+    @Override
+    public String visitTryExpr(TryExpr expr) {
+        return "TryExpr";
+    }
+
+    @Override
+    public String visitThrowExpr(ThrowExpr expr) {
+        return "ThrowExpr";
+    }
+
     @Override
     public String visitConcurrentExpr(ConcurrentExpr expr) {
         return "ConcurrentExpr";
@@ -160,8 +189,23 @@ public class AstPrinter implements AstVisitor<String> {
     }
     
     @Override
+    public String visitAwaitExpr(AwaitExpr expr) {
+        return "AwaitExpr";
+    }
+    
+    @Override
     public String visitCoalesceExpr(CoalesceExpr expr) {
         return "CoalesceExpr";
+    }
+    
+    @Override
+    public String visitSafeAccessExpr(SafeAccessExpr expr) {
+        return "SafeAccess: " + expr.getObject().accept(this) + "?." + expr.getFieldName();
+    }
+    
+    @Override
+    public String visitForceUnwrapExpr(ForceUnwrapExpr expr) {
+        return "ForceUnwrap: " + expr.getExpression().accept(this) + "!!";
     }
     
     @Override
@@ -178,7 +222,22 @@ public class AstPrinter implements AstVisitor<String> {
     public String visitArrayLiteralExpr(com.firefly.compiler.ast.expr.ArrayLiteralExpr expr) {
         return "ArrayLiteral[" + expr.getElements().size() + "]";
     }
+
+    @Override
+    public String visitTupleLiteralExpr(com.firefly.compiler.ast.expr.TupleLiteralExpr expr) {
+        return "TupleLiteral[" + expr.getElements().size() + "]";
+    }
     
+    @Override
+    public String visitStructLiteralExpr(com.firefly.compiler.ast.expr.StructLiteralExpr expr) {
+        return "StructLiteral:" + expr.getStructName() + "[" + expr.getFieldInits().size() + " fields]";
+    }
+    
+    @Override
+    public String visitMapLiteralExpr(com.firefly.compiler.ast.expr.MapLiteralExpr expr) {
+        return "MapLiteral[" + expr.getEntries().size() + " entries]";
+    }
+
     @Override
     public String visitPattern(Pattern pattern) {
         return "Pattern";
@@ -207,5 +266,31 @@ public class AstPrinter implements AstVisitor<String> {
     @Override
     public String visitFunctionType(FunctionType type) {
         return "FunctionType";
+    }
+
+    @Override
+    public String visitGenericType(GenericType type) {
+        return "GenericType(" + type.getName() + ")";
+    }
+
+    @Override
+    public String visitTypeParameter(TypeParameter type) {
+        return "TypeParameter(" + type.getName() + ")";
+    }
+
+    @Override
+    public String visitTupleType(com.firefly.compiler.ast.type.TupleType type) {
+        return "TupleType[" + type.getArity() + "]";
+    }
+    
+    @Override
+    public String visitTypeAliasDecl(com.firefly.compiler.ast.decl.TypeAliasDecl decl) {
+        return "TypeAlias: " + decl.getName() + " = " + decl.getTargetType().getName();
+    }
+    
+    @Override
+    public String visitExceptionDecl(com.firefly.compiler.ast.decl.ExceptionDecl decl) {
+        String superClass = decl.getSuperException().orElse("FlyException");
+        return "Exception: " + decl.getName() + " extends " + superClass;
     }
 }

@@ -2,16 +2,18 @@ grammar Firefly;
 
 // Parser Rules
 
+// All Firefly files must declare a module (like Java's package requirement)
 compilationUnit
-    : packageDeclaration? importDeclaration* topLevelDeclaration* EOF
+    : moduleDeclaration useDeclaration* topLevelDeclaration* EOF
     ;
 
-packageDeclaration
-    : 'package' qualifiedName
+// Module declaration is MANDATORY (uses 'module' keyword with :: separators)
+moduleDeclaration
+    : 'module' importPath
     ;
 
-importDeclaration
-    : 'import' importPath ('::' importItems)?
+useDeclaration
+    : 'use' importPath ('::' importItems)?
     ;
 
 importItems
@@ -26,11 +28,12 @@ importItem
     ;
 
 topLevelDeclaration
-    : annotation* ( functionDeclaration
-                  | classDeclaration
+    : annotation* ( classDeclaration
                   | interfaceDeclaration
+                  | enumDeclaration
                   | dataDeclaration
                   | structDeclaration
+                  | sparkDeclaration
                   | traitDeclaration
                   | implDeclaration
                   | typeAliasDeclaration
@@ -40,6 +43,7 @@ topLevelDeclaration
                   | supervisorDeclaration
                   | flowDeclaration
                   | macroDeclaration
+                  | exceptionDeclaration
                   )
     ;
 
@@ -61,18 +65,73 @@ classMember
     : fieldDeclaration
     | methodDeclaration
     | constructorDeclaration
+    | flyDeclaration
+    | staticFieldDeclaration
+    | staticMethodDeclaration
+    | nestedClassDeclaration
+    | nestedInterfaceDeclaration
+    | nestedEnumDeclaration
+    | nestedSparkDeclaration
+    | nestedStructDeclaration
+    | nestedDataDeclaration
+    ;
+
+// Nested class declarations (inner classes)
+nestedClassDeclaration
+    : annotation* visibility? 'static'? 'class' TYPE_IDENTIFIER typeParameters? ('extends' type)? ('implements' typeList)? '{' classMember* '}'
+    ;
+
+nestedInterfaceDeclaration
+    : annotation* visibility? 'static'? 'interface' TYPE_IDENTIFIER typeParameters? ('extends' typeList)? '{' interfaceMember* '}'
+    ;
+
+nestedEnumDeclaration
+    : annotation* visibility? 'static'? 'enum' TYPE_IDENTIFIER '{' enumVariant (',' enumVariant)* ','? '}'
+    ;
+
+nestedSparkDeclaration
+    : annotation* visibility? 'static'? 'spark' TYPE_IDENTIFIER typeParameters? '{' sparkMember* '}'
+    ;
+
+nestedStructDeclaration
+    : annotation* visibility? 'static'? 'struct' TYPE_IDENTIFIER typeParameters? '{' structField* '}'
+    ;
+
+nestedDataDeclaration
+    : annotation* visibility? 'static'? 'data' TYPE_IDENTIFIER typeParameters? '{' dataVariant (',' dataVariant)* ','? '}'
     ;
 
 fieldDeclaration
-    : annotation* 'let' 'mut'? IDENTIFIER ':' type ('=' expression)? ';'
+    : annotation* visibility? 'let' 'mut'? IDENTIFIER ':' type ('=' expression)? ';'
     ;
 
 methodDeclaration
-    : annotation* 'async'? 'fn' IDENTIFIER typeParameters? '(' parameterList? ')' ('->' type)? blockExpression
+    : annotation* visibility 'async'? 'fn' IDENTIFIER typeParameters? '(' parameterList? ')' '->' type blockExpression
     ;
 
 constructorDeclaration
-    : annotation* 'init' '(' parameterList? ')' blockExpression
+    : annotation* visibility? 'init' '(' parameterList? ')' blockExpression
+    ;
+
+// Fly declaration (main entry point - must be public static and take String[] args)
+flyDeclaration
+    : annotation* 'pub'? 'fn' 'fly' '(' 'args' ':' '[' 'String' ']' ')' '->' type blockExpression
+    ;
+
+// Visibility modifiers
+visibility
+    : 'pub'
+    | 'priv'
+    ;
+
+// Static field declaration
+staticFieldDeclaration
+    : annotation* visibility? 'static' 'let' 'mut'? IDENTIFIER ':' type ('=' expression)? ';'
+    ;
+
+// Static method declaration
+staticMethodDeclaration
+    : annotation* visibility? 'static' 'async'? 'fn' IDENTIFIER typeParameters? '(' parameterList? ')' '->' type blockExpression
     ;
 
 // Struct declaration (product types)
@@ -82,6 +141,57 @@ structDeclaration
 
 structField
     : annotation* IDENTIFIER ':' type ('=' expression)? ','?
+    ;
+
+// Spark declaration (immutable smart record with superpowers)
+sparkDeclaration
+    : 'spark' TYPE_IDENTIFIER typeParameters? '{' sparkMember* '}'
+    ;
+
+sparkMember
+    : sparkField
+    | validateBlock
+    | beforeHook
+    | afterHook
+    | computedProperty
+    | sparkMethod
+    ;
+
+sparkField
+    : annotation* IDENTIFIER ':' type ('=' expression)? ','?
+    ;
+
+validateBlock
+    : 'validate' blockExpression
+    ;
+
+beforeHook
+    : 'before' 'update' blockExpression
+    ;
+
+afterHook
+    : 'after' 'update' '(' IDENTIFIER ',' IDENTIFIER ')' blockExpression
+    ;
+
+computedProperty
+    : 'computed' IDENTIFIER ':' type blockExpression
+    ;
+
+sparkMethod
+    : 'fn' IDENTIFIER typeParameters? '(' parameterList? ')' ('->' type)? blockExpression
+    ;
+
+// Enum declaration (for Java interop)
+enumDeclaration
+    : 'enum' TYPE_IDENTIFIER '{' enumVariant (',' enumVariant)* ','? '}'
+    ;
+
+enumVariant
+    : TYPE_IDENTIFIER ('(' enumFieldList ')')?
+    ;
+
+enumFieldList
+    : type (',' type)*
     ;
 
 // Data declaration (algebraic data types / sum types)
@@ -126,7 +236,7 @@ implMember
 
 // Type alias
 typeAliasDeclaration
-    : 'type' TYPE_IDENTIFIER typeParameters? '=' type
+    : 'type' TYPE_IDENTIFIER typeParameters? '=' type ';'
     ;
 
 // Protocol declaration (like Swift protocols)
@@ -184,6 +294,17 @@ macroDeclaration
     : 'macro' IDENTIFIER '(' parameterList? ')' blockExpression
     ;
 
+// Exception declaration (Flylang exception types)
+exceptionDeclaration
+    : 'exception' TYPE_IDENTIFIER ('extends' TYPE_IDENTIFIER)? '{' exceptionMember* '}'
+    ;
+
+exceptionMember
+    : fieldDeclaration
+    | methodDeclaration
+    | constructorDeclaration
+    ;
+
 // Function declaration (expression-oriented)
 functionDeclaration
     : 'async'? 'fn' IDENTIFIER typeParameters? '(' parameterList? ')' ('->' type)? effectClause? requiresClause? '=' expression
@@ -218,15 +339,22 @@ typeList
 // Types (modern, expressive)
 type
     : primitiveType
-    | TYPE_IDENTIFIER typeArguments?
+    | TYPE_IDENTIFIER typeArguments? typeVariance?
     | '&' type                                      // Reference type
     | '&' 'mut' type                                // Mutable reference
     | '[' type ']'                                  // Array/List type
     | '[' type ':' type ']'                         // Map type
     | type '?'                                      // Optional/Nullable type
+    | type '|' type                                 // Union type
+    | type '&' type                                 // Intersection type
     | '(' typeList ')' '->' type                    // Function type
     | '(' type ')'
     | tupleType
+    ;
+
+typeVariance
+    : '<+' TYPE_IDENTIFIER '>'                      // Covariant
+    | '<-' TYPE_IDENTIFIER '>'                      // Contravariant
     ;
 
 primitiveType
@@ -234,7 +362,8 @@ primitiveType
     | 'String'
     | 'Bool'
     | 'Float'
-    | 'Unit'
+    | 'Void'
+    | 'Unit'  // Alias for Void
     ;
 
 tupleType
@@ -262,7 +391,7 @@ statement
     | expression ';'                                    # ExprStmt
     ;
 
-// Expressions (expression-oriented language)
+// Expressions (expression-oriented language) with proper precedence
 expression
     : primaryExpression                                     # PrimaryExpr
     | blockExpression                                       # BlockExpr
@@ -270,12 +399,17 @@ expression
     | matchExpression                                       # MatchExpr
     | forExpression                                         # ForExpr
     | whileExpression                                       # WhileExpr
+    | tryExpression                                         # TryExpr
     | lambdaExpression                                      # LambdaExpr
     | concurrentExpression                                  # ConcurrentExpr
     | raceExpression                                        # RaceExpr
     | timeoutExpression                                     # TimeoutExpr
     | withExpression                                        # WithExpr
+    | 'throw' expression                                    # ThrowExpr
+    | TYPE_IDENTIFIER '::' IDENTIFIER '(' argumentList? ')'  # StaticMethodCallExpr
+    | expression '::' IDENTIFIER '(' argumentList? ')'      # MethodCallExpr
     | expression '.' IDENTIFIER                             # FieldAccessExpr
+    | TYPE_IDENTIFIER '::' TYPE_IDENTIFIER                  # StaticAccessExpr
     | expression '.' 'class'                                # ClassLiteralExpr
     | expression '?.' IDENTIFIER                            # SafeAccessExpr
     | expression '[' expression ']'                         # IndexAccessExpr
@@ -286,27 +420,35 @@ expression
     | expression '?:' expression                            # ElvisExpr
     | '!' expression                                        # NotExpr
     | '-' expression                                        # UnaryMinusExpr
+    | '+' expression                                        # UnaryPlusExpr
     | '&' expression                                        # RefExpr
     | '&' 'mut' expression                                  # MutRefExpr
     | '*' expression                                        # DerefExpr
+    | <assoc=right> expression '**' expression              # PowerExpr
     | expression op=('*' | '/' | '%') expression            # MultiplicativeExpr
     | expression op=('+' | '-') expression                  # AdditiveExpr
+    | expression op=('<<' | '>>') expression                # ShiftExpr
+    | expression '&' expression                             # BitwiseAndExpr
+    | expression '^' expression                             # BitwiseXorExpr
+    | expression '|' expression                             # BitwiseOrExpr
     | expression op=('==' | '!=' | '<' | '>' | '<=' | '>=') expression  # ComparisonExpr
+    | expression op=('is' | 'as') type                      # TypeCheckExpr
     | expression '&&' expression                            # LogicalAndExpr
     | expression '||' expression                            # LogicalOrExpr
-    | expression '>>' expression                            # SendMessageExpr
     | expression '??' expression                            # CoalesceExpr
     | expression '..' expression                            # RangeExpr
     | expression '..=' expression                           # RangeInclusiveExpr
-    | expression '.' IDENTIFIER '=' expression              # FieldAssignmentExpr
-    | IDENTIFIER '=' expression                             # AssignmentExpr
+    | <assoc=right> expression '.' IDENTIFIER '=' expression              # FieldAssignmentExpr
+    | <assoc=right> IDENTIFIER '=' expression                             # AssignmentExpr
+    | <assoc=right> expression op=('+=' | '-=' | '*=' | '/=' | '%=') expression  # CompoundAssignmentExpr
     | 'return' expression?                                  # ReturnExpr
-    | 'break'                                               # BreakExpr
+    | 'break' expression?                                   # BreakExpr
     | 'continue'                                            # ContinueExpr
     ;
 
 ifExpression
     : 'if' expression blockExpression ('else' 'if' expression blockExpression)* ('else' blockExpression)?
+    | 'if' 'let' pattern '=' expression blockExpression ('else' blockExpression)?   // if-let
     ;
 
 matchExpression
@@ -347,17 +489,25 @@ withExpression
 
 whileExpression
     : 'while' expression blockExpression
+    | 'while' 'let' pattern '=' expression blockExpression      // while-let
     ;
 
 lambdaExpression
-    : '|' parameterList? '|' expression
-    | '|' parameterList? '|' blockExpression
+    : 'lambda' '(' lambdaParameterList? ')' '->' expression
+    | 'lambda' '(' lambdaParameterList? ')' '->' blockExpression
+    | '|' lambdaParameterList? '|' '->' expression              // Shorthand syntax
+    | '|' lambdaParameterList? '|' blockExpression              // Shorthand with block
+    ;
+
+lambdaParameterList
+    : IDENTIFIER (',' IDENTIFIER)*
     ;
 
 primaryExpression
     : literal
     | IDENTIFIER
     | TYPE_IDENTIFIER
+    | TYPE_IDENTIFIER '.' 'class'                        // Class literal as primary expr (e.g., Application.class)
     | arrayLiteral
     | mapLiteral
     | tupleLiteral
@@ -369,13 +519,18 @@ primaryExpression
 
 pattern
     : literal                                               # LiteralPattern
+    | IDENTIFIER ':' type                                   # TypedVariablePattern
     | IDENTIFIER                                            # VariablePattern
+    | 'mut' IDENTIFIER ':' type                             # TypedMutableVariablePattern
     | 'mut' IDENTIFIER                                      # MutableVariablePattern
     | TYPE_IDENTIFIER '{' fieldPattern (',' fieldPattern)* ','? '}'  # StructPattern
     | TYPE_IDENTIFIER '(' pattern (',' pattern)* ','? ')'   # TupleStructPattern
     | '(' pattern (',' pattern)+ ')'                        # TuplePattern
     | '[' pattern (',' pattern)* ','? ']'                   # ArrayPattern
     | '[' pattern (',' '..')? ']'                           # ArrayRestPattern
+    | expression '..' expression                            # RangePattern
+    | expression '..=' expression                           # RangeInclusivePattern
+    | pattern 'if' expression                               # GuardPattern
     | '_'                                                   # WildcardPattern
     | pattern '|' pattern                                   # OrPattern
     ;
@@ -385,11 +540,25 @@ fieldPattern
     | IDENTIFIER ':' pattern
     ;
 
+// Try-catch-finally expression
+tryExpression
+    : 'try' blockExpression catchClause* finallyClause?
+    ;
+
+catchClause
+    : 'catch' '(' pattern ')' blockExpression
+    ;
+
+finallyClause
+    : 'finally' blockExpression
+    ;
+
 // Literals
 literal
     : INTEGER_LITERAL
     | FLOAT_LITERAL
     | STRING_LITERAL
+    | INTERPOLATED_STRING
     | CHAR_LITERAL
     | BOOLEAN_LITERAL
     | 'none'
@@ -445,7 +614,7 @@ pathSegment
 
 // Keywords that can be used as identifiers in specific contexts
 keyword
-    : 'context' | 'data' | 'type' | 'trait' | 'impl' | 'struct'
+    : 'context' | 'data' | 'type' | 'trait' | 'impl' | 'struct' | 'spark' | 'enum'
     | 'for' | 'in' | 'match' | 'if' | 'else' | 'while'
     | 'let' | 'fn' | 'class' | 'interface' | 'new'
     | 'async' | 'await' | 'with' | 'using' | 'when'
@@ -453,7 +622,7 @@ keyword
     | 'macro' | 'break' | 'continue' | 'return'
     | 'pub' | 'priv' | 'mut' | 'self'
     | 'requires' | 'concurrent' | 'race' | 'timeout'
-    | 'extends' | 'implements' | 'init'
+    | 'extends' | 'implements' | 'init' | 'lambda'
     ;
 
 // Annotations (for Spring Boot integration)
@@ -466,15 +635,30 @@ annotationArguments
     ;
 
 annotationArgument
-    : IDENTIFIER '=' literal
-    | literal
+    : IDENTIFIER '=' annotationValue
+    | annotationValue
+    ;
+
+annotationValue
+    : literal
+    | TYPE_IDENTIFIER
     ;
 
 // Lexer Rules
 
 // Keywords
-PACKAGE     : 'package';
-IMPORT      : 'import';
+STATIC      : 'static';
+ENUM        : 'enum';
+EXCEPTION   : 'exception';
+THROW       : 'throw';
+TRY         : 'try';
+CATCH       : 'catch';
+FINALLY     : 'finally';
+IS          : 'is';
+AS          : 'as';
+LAMBDA      : 'lambda';
+MODULE      : 'module';
+USE         : 'use';
 FN          : 'fn';
 CLASS       : 'class';
 INTERFACE   : 'interface';
@@ -521,8 +705,9 @@ TIMEOUT     : 'timeout';
 // Literals
 BOOLEAN_LITERAL : 'true' | 'false';
 INTEGER_LITERAL : [0-9]+ ('_' [0-9]+)* | '0x'[0-9a-fA-F]+ | '0b'[01]+ | '0o'[0-7]+;
-FLOAT_LITERAL   : [0-9]+ '.' [0-9]+ ([eE][+-]?[0-9]+)?;
+FLOAT_LITERAL   : [0-9]+ '.' [0-9]+ ([eE][+-]?[0-9]+)? | [0-9]+ [eE][+-]?[0-9]+;
 STRING_LITERAL  : '"' (~["\r\n\\] | '\\' .)* '"';
+INTERPOLATED_STRING : 'f"' (~["\r\n\\$] | '\\' . | '${' ~[}]* '}')* '"';  // f"Hello ${name}"
 CHAR_LITERAL    : '\'' (~['\r\n\\] | '\\' .) '\'';
 
 // Identifiers
@@ -545,4 +730,6 @@ ELVIS           : '?:';
 // Whitespace and comments
 WS              : [ \t\r\n]+ -> skip;
 LINE_COMMENT    : '//' ~[\r\n]* -> skip;
+DOC_COMMENT     : '///' ~[\r\n]*;  // Documentation comment
 BLOCK_COMMENT   : '/*' .*? '*/' -> skip;
+BLOCK_DOC_COMMENT : '/**' .*? '*/' ;  // Documentation block comment
