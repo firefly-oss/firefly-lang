@@ -110,6 +110,13 @@ dist/
 *.fly.bak
 .firefly/
 
+# IDE plugin builds
+ide-plugins/*/node_modules/
+ide-plugins/*/out/
+ide-plugins/*/build/
+ide-plugins/*/*.vsix
+ide-plugins/*/*.zip
+
 # Temporary files
 *.tmp
 *.temp
