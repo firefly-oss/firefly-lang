@@ -31,7 +31,7 @@ scoop install openjdk21 maven nodejs
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/firefly-lang.git
+git clone https://github.com/firefly-oss/firefly-lang.git
 cd firefly-lang
 
 # Build all modules (compiler, runtime, Maven plugin)
