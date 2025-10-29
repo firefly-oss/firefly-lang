@@ -1,5 +1,6 @@
 package com.firefly.compiler.semantic;
 
+import com.firefly.compiler.ast.decl.FunctionDecl;
 import com.firefly.compiler.ast.type.Type;
 
 import java.util.*;
@@ -18,28 +19,35 @@ public class SymbolTable {
         private final SymbolKind kind;
         private final boolean isMutable;
         private final boolean isAsync;
-        
+        private final FunctionDecl functionDecl; // For generic function type inference
+
         public Symbol(String name, Type type, SymbolKind kind, boolean isMutable) {
-            this(name, type, kind, isMutable, false);
+            this(name, type, kind, isMutable, false, null);
         }
-        
+
         public Symbol(String name, Type type, SymbolKind kind, boolean isMutable, boolean isAsync) {
+            this(name, type, kind, isMutable, isAsync, null);
+        }
+
+        public Symbol(String name, Type type, SymbolKind kind, boolean isMutable, boolean isAsync, FunctionDecl functionDecl) {
             this.name = name;
             this.type = type;
             this.kind = kind;
             this.isMutable = isMutable;
             this.isAsync = isAsync;
+            this.functionDecl = functionDecl;
         }
-        
+
         public String getName() { return name; }
         public Type getType() { return type; }
         public SymbolKind getKind() { return kind; }
         public boolean isMutable() { return isMutable; }
         public boolean isAsync() { return isAsync; }
+        public FunctionDecl getFunctionDecl() { return functionDecl; }
     }
     
     public enum SymbolKind {
-        VARIABLE, FUNCTION, PARAMETER, STRUCT, DATA, TRAIT
+        VARIABLE, FUNCTION, PARAMETER, STRUCT, DATA, TRAIT, FIELD, SPARK
     }
     
     private final SymbolTable parent;
@@ -72,17 +80,24 @@ public class SymbolTable {
      * Define a new symbol in the current scope.
      */
     public void define(String name, Type type, SymbolKind kind, boolean isMutable) {
-        define(name, type, kind, isMutable, false);
+        define(name, type, kind, isMutable, false, null);
     }
-    
+
     /**
      * Define a new symbol in the current scope with async flag.
      */
     public void define(String name, Type type, SymbolKind kind, boolean isMutable, boolean isAsync) {
+        define(name, type, kind, isMutable, isAsync, null);
+    }
+
+    /**
+     * Define a new symbol in the current scope with async flag and function declaration.
+     */
+    public void define(String name, Type type, SymbolKind kind, boolean isMutable, boolean isAsync, FunctionDecl functionDecl) {
         if (symbols.containsKey(name)) {
             throw new SemanticException("Symbol already defined in current scope: " + name);
         }
-        symbols.put(name, new Symbol(name, type, kind, isMutable, isAsync));
+        symbols.put(name, new Symbol(name, type, kind, isMutable, isAsync, functionDecl));
     }
     
     /**
@@ -121,13 +136,14 @@ public class SymbolTable {
         if (parent != null) {
             return;
         }
-        
+
         // Built-in print functions
         symbols.put("println", new Symbol("println", null, SymbolKind.FUNCTION, false));
         symbols.put("print", new Symbol("print", null, SymbolKind.FUNCTION, false));
-        
-        // Built-in utility functions  
+
+        // Built-in utility functions
         symbols.put("toString", new Symbol("toString", null, SymbolKind.FUNCTION, false));
         symbols.put("error", new Symbol("error", null, SymbolKind.FUNCTION, false));
+        symbols.put("panic", new Symbol("panic", null, SymbolKind.FUNCTION, false));
     }
 }

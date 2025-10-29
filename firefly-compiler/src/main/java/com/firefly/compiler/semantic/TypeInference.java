@@ -59,26 +59,176 @@ public class TypeInference implements AstVisitor<Type> {
         for (Declaration decl : unit.getDeclarations()) {
             decl.accept(this);
         }
-        return new PrimitiveType("Unit");
+        return new PrimitiveType("Void");
     }
     
     @Override
-    public Type visitImportDeclaration(ImportDeclaration decl) {
-        return new PrimitiveType("Unit");
+    public Type visitUseDeclaration(UseDeclaration decl) {
+        return new PrimitiveType("Void");
     }
     
     // ============ Declarations ============
     
     @Override
     public Type visitClassDecl(ClassDecl decl) {
-        // TODO: Implement class type inference for v0.3.0
-        return new PrimitiveType("Unit");
+        // Enter class scope
+        currentScope = currentScope.enterScope();
+        
+        // Add fields to scope
+        for (ClassDecl.FieldDecl field : decl.getFields()) {
+            try {
+                currentScope.define(
+                    field.getName(),
+                    field.getType(),
+                    SymbolTable.SymbolKind.FIELD,
+                    field.isMutable()
+                );
+                
+                // If field has initializer, infer its type
+                if (field.getInitializer().isPresent()) {
+                    Type initType = field.getInitializer().get().accept(this);
+                    typeMap.put(field.getInitializer().get(), initType);
+                }
+            } catch (SemanticException e) {
+                reporter.error("TI101", "Field already defined: " + field.getName(), null);
+            }
+        }
+        
+        // Predeclare methods in class scope so they can be referenced within the class
+        for (ClassDecl.MethodDecl method : decl.getMethods()) {
+            Type returnType = method.getReturnType().orElse(new PrimitiveType("Void"));
+            try {
+                currentScope.define(
+                    method.getName(),
+                    returnType,
+                    SymbolTable.SymbolKind.FUNCTION,
+                    false,
+                    method.isAsync()
+                );
+            } catch (SemanticException e) {
+                // Ignore duplicate method definitions in inference phase
+            }
+        }
+        
+        // Infer types for methods
+        for (ClassDecl.MethodDecl method : decl.getMethods()) {
+            // Enter method scope
+            currentScope = currentScope.enterScope();
+            
+            // Add method parameters to scope
+            for (FunctionDecl.Parameter param : method.getParameters()) {
+                try {
+                    currentScope.define(
+                        param.getName(),
+                        param.getType(),
+                        SymbolTable.SymbolKind.PARAMETER,
+                        param.isMutable()
+                    );
+                } catch (SemanticException e) {
+                    // Parameter already defined, skip
+                }
+            }
+            
+            // Infer method body type
+            Type bodyType = method.getBody().accept(this);
+            typeMap.put(method.getBody(), bodyType);
+            
+            // Exit method scope
+            currentScope = currentScope.exitScope();
+        }
+        
+        // Infer constructor if present
+        if (decl.getConstructor().isPresent()) {
+            ClassDecl.ConstructorDecl constructor = decl.getConstructor().get();
+            
+            // Enter constructor scope
+            currentScope = currentScope.enterScope();
+            
+            // Add constructor parameters to scope
+            for (FunctionDecl.Parameter param : constructor.getParameters()) {
+                try {
+                    currentScope.define(
+                        param.getName(),
+                        param.getType(),
+                        SymbolTable.SymbolKind.PARAMETER,
+                        param.isMutable()
+                    );
+                } catch (SemanticException e) {
+                    // Parameter already defined, skip
+                }
+            }
+            
+            // Infer constructor body type
+            Type bodyType = constructor.getBody().accept(this);
+            typeMap.put(constructor.getBody(), bodyType);
+            
+            // Exit constructor scope
+            currentScope = currentScope.exitScope();
+        }
+        
+        // Exit class scope
+        currentScope = currentScope.exitScope();
+        
+        return new NamedType(decl.getName());
     }
     
     @Override
     public Type visitInterfaceDecl(InterfaceDecl decl) {
-        return new PrimitiveType("Unit");
+        return new PrimitiveType("Void");
     }
+    @Override
+    public Type visitActorDecl(ActorDecl decl) {
+        // Enter actor scope
+        currentScope = currentScope.enterScope();
+        
+        // Add actor fields to scope
+        for (FieldDecl field : decl.getFields()) {
+            try {
+                currentScope.define(
+                    field.getName(),
+                    field.getType(),
+                    SymbolTable.SymbolKind.FIELD,
+                    field.isMutable()
+                );
+                
+                // If field has initializer, infer its type
+                if (field.getInitializer().isPresent()) {
+                    Type initType = field.getInitializer().get().accept(this);
+                    typeMap.put(field.getInitializer().get(), initType);
+                }
+            } catch (SemanticException e) {
+                reporter.error("TI102", "Actor field already defined: " + field.getName(), null);
+            }
+        }
+        
+        // Infer type of init block
+        if (decl.getInitBlock() != null) {
+            Type initType = decl.getInitBlock().accept(this);
+            typeMap.put(decl.getInitBlock(), initType);
+        }
+        
+        // Infer types for receive cases
+        for (ActorDecl.ReceiveCase receiveCase : decl.getReceiveCases()) {
+            // Enter receive case scope
+            currentScope = currentScope.enterScope();
+            
+            // Extract variables from pattern and add to scope
+            extractPatternVariables(receiveCase.getPattern(), currentScope);
+            
+            // Infer type of case expression
+            Type caseType = receiveCase.getExpression().accept(this);
+            typeMap.put(receiveCase.getExpression(), caseType);
+            
+            // Exit receive case scope
+            currentScope = currentScope.exitScope();
+        }
+        
+        // Exit actor scope
+        currentScope = currentScope.exitScope();
+        
+        return new NamedType(decl.getName());
+    }
+
     
     @Override
     public Type visitFunctionDecl(FunctionDecl decl) {
@@ -120,6 +270,11 @@ public class TypeInference implements AstVisitor<Type> {
     }
     
     @Override
+    public Type visitSparkDecl(SparkDecl decl) {
+        return new NamedType(decl.getName());
+    }
+    
+    @Override
     public Type visitDataDecl(DataDecl decl) {
         return new NamedType(decl.getName());
     }
@@ -131,7 +286,7 @@ public class TypeInference implements AstVisitor<Type> {
     
     @Override
     public Type visitImplDecl(ImplDecl decl) {
-        return new PrimitiveType("Unit");
+        return new PrimitiveType("Void");
     }
     
     // ============ Statements ============
@@ -160,7 +315,7 @@ public class TypeInference implements AstVisitor<Type> {
             
             return initType;
         }
-        return new PrimitiveType("Unit");
+        return new PrimitiveType("Void");
     }
     
     @Override
@@ -181,6 +336,7 @@ public class TypeInference implements AstVisitor<Type> {
             case MULTIPLY:
             case DIVIDE:
             case MODULO:
+            case POWER:
                 // Arithmetic operators: require numeric types
                 if (isNumericType(leftType) && isNumericType(rightType)) {
                     return promoteNumericType(leftType, rightType);
@@ -192,7 +348,25 @@ public class TypeInference implements AstVisitor<Type> {
                     expr.getLocation(),
                     "Expected Int or Float types for arithmetic operations"
                 );
-                return new PrimitiveType("Unit");
+                return new PrimitiveType("Void");
+                
+            case BIT_AND:
+            case BIT_OR:
+            case BIT_XOR:
+            case BIT_LEFT_SHIFT:
+            case BIT_RIGHT_SHIFT:
+                // Bitwise operators: require Int types
+                if (leftType.getName().equals("Int") && rightType.getName().equals("Int")) {
+                    return new PrimitiveType("Int");
+                }
+                reporter.error(
+                    "TI003",
+                    String.format("Bitwise operator '%s' requires Int types, got %s and %s",
+                        expr.getOperator(), leftType.getName(), rightType.getName()),
+                    expr.getLocation(),
+                    "Bitwise operations are only supported on Int types"
+                );
+                return new PrimitiveType("Void");
                 
             case EQUAL:
             case NOT_EQUAL:
@@ -249,9 +423,25 @@ public class TypeInference implements AstVisitor<Type> {
     
     @Override
     public Type visitCallExpr(CallExpr expr) {
-        // If calling a function by name, look it up in the symbol table
+        // If calling a function by name, check for builtins first
         if (expr.getFunction() instanceof IdentifierExpr) {
             String funcName = ((IdentifierExpr) expr.getFunction()).getName();
+            
+            // Handle builtin functions
+            if (funcName.equals("println") || funcName.equals("print")) {
+                // println/print returns Void
+                return new PrimitiveType("Void");
+            }
+            if (funcName.equals("format")) {
+                // format returns String
+                return new PrimitiveType("String");
+            }
+            if (funcName.equals("spawn")) {
+                // spawn returns ActorRef (treat as Object for now)
+                return new NamedType("ActorRef");
+            }
+            
+            // Look up in symbol table
             Optional<SymbolTable.Symbol> symbol = currentScope.lookup(funcName);
             if (symbol.isPresent() && symbol.get().getKind() == SymbolTable.SymbolKind.FUNCTION) {
                 // Return the function's declared return type
@@ -274,8 +464,30 @@ public class TypeInference implements AstVisitor<Type> {
     @Override
     public Type visitFieldAccessExpr(FieldAccessExpr expr) {
         Type objectType = expr.getObject().accept(this);
-        // TODO: Look up field type in struct definition
-        return new PrimitiveType("Unit");
+        String fieldName = expr.getFieldName();
+        
+        // Look up field type in struct/spark/class definition
+        if (objectType instanceof NamedType) {
+            String typeName = ((NamedType) objectType).getName();
+            
+            // Look up the type definition in global scope
+            Optional<SymbolTable.Symbol> typeSymbol = globalScope.lookup(typeName);
+            if (typeSymbol.isPresent()) {
+                SymbolTable.Symbol symbol = typeSymbol.get();
+                
+                // If it's a struct or spark, look up field type
+                if (symbol.getKind() == SymbolTable.SymbolKind.STRUCT ||
+                    symbol.getKind() == SymbolTable.SymbolKind.SPARK) {
+                    // Enter the type's scope to access fields
+                    // For now, return Any - full implementation would require
+                    // storing field metadata in symbol table
+                    return new PrimitiveType("Any");
+                }
+            }
+        }
+        
+        // Fallback: return Any for unknown fields
+        return new PrimitiveType("Any");
     }
     
     @Override
@@ -286,7 +498,7 @@ public class TypeInference implements AstVisitor<Type> {
             return ((ArrayType) objectType).getElementType();
         }
         
-        return new PrimitiveType("Unit");
+        return new PrimitiveType("Void");
     }
     
     @Override
@@ -303,7 +515,7 @@ public class TypeInference implements AstVisitor<Type> {
             case BOOLEAN:
                 return new PrimitiveType("Bool");
             case NONE:
-                return new OptionalType(new PrimitiveType("Unit"));
+                return new OptionalType(new PrimitiveType("Void"));
             default:
                 throw new SemanticException("Unknown literal kind: " + expr.getKind());
         }
@@ -311,7 +523,16 @@ public class TypeInference implements AstVisitor<Type> {
     
     @Override
     public Type visitIdentifierExpr(IdentifierExpr expr) {
-        Optional<SymbolTable.Symbol> symbol = currentScope.lookup(expr.getName());
+        String name = expr.getName();
+        
+        // Check for builtin functions
+        if (name.equals("println") || name.equals("print") || 
+            name.equals("format") || name.equals("spawn")) {
+            // Builtins are valid identifiers, return a generic function type
+            return new PrimitiveType("Void");
+        }
+        
+        Optional<SymbolTable.Symbol> symbol = currentScope.lookup(name);
         if (symbol.isPresent()) {
             return symbol.get().getType();
         }
@@ -319,13 +540,13 @@ public class TypeInference implements AstVisitor<Type> {
         // Report error with location info
         reporter.error(
             "TI001",
-            "Undefined identifier: '" + expr.getName() + "'",
+            "Undefined identifier: '" + name + "'",
             expr.getLocation(),
             "Make sure the variable or function is declared before use"
         );
         
         // Return Unit as fallback to continue type checking
-        return new PrimitiveType("Unit");
+        return new PrimitiveType("Void");
     }
     
     @Override
@@ -347,11 +568,11 @@ public class TypeInference implements AstVisitor<Type> {
                 return thenType;
             }
             // For now, return Unit if types don't match (should be union type)
-            return new PrimitiveType("Unit");
+            return new PrimitiveType("Void");
         }
         
         // No else branch, if is a statement, returns Unit
-        return new PrimitiveType("Unit");
+        return new PrimitiveType("Void");
     }
     
     @Override
@@ -360,7 +581,7 @@ public class TypeInference implements AstVisitor<Type> {
         if (!expr.getArms().isEmpty()) {
             return expr.getArms().get(0).getBody().accept(this);
         }
-        return new PrimitiveType("Unit");
+        return new PrimitiveType("Void");
     }
     
     @Override
@@ -375,7 +596,7 @@ public class TypeInference implements AstVisitor<Type> {
         
         // Block type is the type of the final expression
         Optional<Expression> finalExpr = expr.getFinalExpression();
-        Type resultType = new PrimitiveType("Unit");
+        Type resultType = new PrimitiveType("Void");
         if (finalExpr.isPresent()) {
             resultType = finalExpr.get().accept(this);
         }
@@ -397,7 +618,7 @@ public class TypeInference implements AstVisitor<Type> {
                 // For now, use Unit as parameter type (type inference would determine actual type)
                 currentScope.define(
                     paramName,
-                    new PrimitiveType("Unit"),
+                    new PrimitiveType("Void"),
                     SymbolTable.SymbolKind.PARAMETER,
                     false
                 );
@@ -421,8 +642,25 @@ public class TypeInference implements AstVisitor<Type> {
         // Enter for loop scope
         currentScope = currentScope.enterScope();
         
-        // Add loop variable to scope
-        // TODO: Extract variable name from pattern and add to scope
+        // Extract variable name from pattern and add to scope
+        // Pattern is bound to each element from the iterable
+        String patternName = extractPatternName(expr.getPattern());
+        if (patternName != null) {
+            try {
+                // Infer the element type from the iterable
+                Type iterableType = expr.getIterable().accept(this);
+                Type elementType = iterableType; // Simplified - would need to extract generic type
+                
+                currentScope.define(
+                    patternName,
+                    elementType,
+                    SymbolTable.SymbolKind.VARIABLE,
+                    false
+                );
+            } catch (SemanticException e) {
+                // Variable already defined, skip
+            }
+        }
         
         expr.getIterable().accept(this);
         expr.getBody().accept(this);
@@ -430,7 +668,7 @@ public class TypeInference implements AstVisitor<Type> {
         // Exit for loop scope
         currentScope = currentScope.exitScope();
         
-        return new PrimitiveType("Unit");
+        return new PrimitiveType("Void");
     }
     
     @Override
@@ -440,7 +678,7 @@ public class TypeInference implements AstVisitor<Type> {
             throw new SemanticException("While condition must be Bool, got " + conditionType.getName());
         }
         expr.getBody().accept(this);
-        return new PrimitiveType("Unit");
+        return new PrimitiveType("Void");
     }
     
     @Override
@@ -449,19 +687,19 @@ public class TypeInference implements AstVisitor<Type> {
         if (value.isPresent()) {
             return value.get().accept(this);
         }
-        return new PrimitiveType("Unit");
+        return new PrimitiveType("Void");
     }
     
     @Override
     public Type visitBreakExpr(BreakExpr expr) {
         // Break is a control flow expression with bottom type (never returns)
-        return new PrimitiveType("Unit");
+        return new PrimitiveType("Void");
     }
     
     @Override
     public Type visitContinueExpr(ContinueExpr expr) {
         // Continue is a control flow expression with bottom type (never returns)
-        return new PrimitiveType("Unit");
+        return new PrimitiveType("Void");
     }
     
     @Override
@@ -471,7 +709,7 @@ public class TypeInference implements AstVisitor<Type> {
             binding.getExpression().accept(this);
         }
         // concurrent { } returns Unit for now (could be a tuple of results)
-        return new PrimitiveType("Unit");
+        return new PrimitiveType("Void");
     }
     
     @Override
@@ -492,9 +730,9 @@ public class TypeInference implements AstVisitor<Type> {
     public Type visitCoalesceExpr(CoalesceExpr expr) {
         Type leftType = expr.getLeft().accept(this);
         Type rightType = expr.getRight().accept(this);
-        // Coalesce returns the non-null type
+        // Prefer the right-hand type when the left is optional (fallback value)
         if (leftType instanceof OptionalType) {
-            return ((OptionalType) leftType).getInnerType();
+            return rightType;
         }
         return leftType;
     }
@@ -515,12 +753,17 @@ public class TypeInference implements AstVisitor<Type> {
         return new com.firefly.compiler.ast.type.NamedType("List");
     }
     
+    public Type visitMapLiteralExpr(com.firefly.compiler.ast.expr.MapLiteralExpr expr) {
+        // Return Map type (we generate HashMap bytecode)
+        return new com.firefly.compiler.ast.type.NamedType("Map");
+    }
+    
     // ============ Patterns ============
     
     @Override
     public Type visitPattern(Pattern pattern) {
         // Pattern type inference is context-dependent
-        return new PrimitiveType("Unit");
+        return new PrimitiveType("Void");
     }
     
     // ============ Types ============
@@ -567,10 +810,162 @@ public class TypeInference implements AstVisitor<Type> {
     
     private String extractPatternName(com.firefly.compiler.ast.Pattern pattern) {
         // Simplified pattern name extraction
-        // TODO: Handle complex patterns
+        if (pattern instanceof com.firefly.compiler.ast.pattern.TypedVariablePattern) {
+            return ((com.firefly.compiler.ast.pattern.TypedVariablePattern) pattern).getName();
+        }
         if (pattern instanceof com.firefly.compiler.ast.pattern.VariablePattern) {
             return ((com.firefly.compiler.ast.pattern.VariablePattern) pattern).getName();
         }
         return null;
+    }
+    
+    /**
+     * Extract variables from a pattern and add them to the given scope.
+     * Handles complex patterns including constructors, tuples, and literals.
+     */
+    private void extractPatternVariables(com.firefly.compiler.ast.Pattern pattern, SymbolTable scope) {
+        if (pattern instanceof com.firefly.compiler.ast.pattern.TypedVariablePattern) {
+            // Typed variable pattern: add to scope with explicit type
+            com.firefly.compiler.ast.pattern.TypedVariablePattern typedPattern = 
+                (com.firefly.compiler.ast.pattern.TypedVariablePattern) pattern;
+            try {
+                scope.define(
+                    typedPattern.getName(),
+                    typedPattern.getType(),
+                    SymbolTable.SymbolKind.VARIABLE,
+                    typedPattern.isMutable()
+                );
+            } catch (SemanticException e) {
+                // Variable already defined, skip
+            }
+        } else if (pattern instanceof com.firefly.compiler.ast.pattern.VariablePattern) {
+            // Simple variable pattern: add to scope with inferred type
+            com.firefly.compiler.ast.pattern.VariablePattern varPattern = 
+                (com.firefly.compiler.ast.pattern.VariablePattern) pattern;
+            try {
+                // Infer type as Any for now - would be refined by unification
+                scope.define(
+                    varPattern.getName(),
+                    new PrimitiveType("Any"),
+                    SymbolTable.SymbolKind.VARIABLE,
+                    false
+                );
+            } catch (SemanticException e) {
+                // Variable already defined, skip
+            }
+        } else if (pattern instanceof com.firefly.compiler.ast.pattern.StructPattern) {
+            // Struct pattern: extract variables from field patterns
+            com.firefly.compiler.ast.pattern.StructPattern structPattern = 
+                (com.firefly.compiler.ast.pattern.StructPattern) pattern;
+            for (com.firefly.compiler.ast.pattern.StructPattern.FieldPattern fieldPattern : structPattern.getFields()) {
+                if (fieldPattern.getPattern() != null) {
+                    extractPatternVariables(fieldPattern.getPattern(), scope);
+                }
+            }
+        } else if (pattern instanceof com.firefly.compiler.ast.pattern.TuplePattern) {
+            // Tuple pattern: extract variables from each element
+            com.firefly.compiler.ast.pattern.TuplePattern tuplePattern = 
+                (com.firefly.compiler.ast.pattern.TuplePattern) pattern;
+            for (com.firefly.compiler.ast.Pattern elementPattern : tuplePattern.getElements()) {
+                extractPatternVariables(elementPattern, scope);
+            }
+        } else if (pattern instanceof com.firefly.compiler.ast.pattern.ArrayPattern) {
+            // Array pattern: extract variables from each element
+            com.firefly.compiler.ast.pattern.ArrayPattern arrayPattern = 
+                (com.firefly.compiler.ast.pattern.ArrayPattern) pattern;
+            for (com.firefly.compiler.ast.Pattern elementPattern : arrayPattern.getElements()) {
+                extractPatternVariables(elementPattern, scope);
+            }
+        }
+        // Literal patterns don't introduce variables, so nothing to do
+    }
+
+    @Override
+    public Type visitTupleType(TupleType type) {
+        return type;
+    }
+
+
+    @Override
+    public Type visitTypeParameter(TypeParameter type) {
+        return type;
+    }
+
+
+    @Override
+    public Type visitGenericType(GenericType type) {
+        return type;
+    }
+
+
+    @Override
+    public Type visitTupleLiteralExpr(TupleLiteralExpr expr) {
+        return new TupleType(expr.getElements().stream()
+            .map(e -> e.accept(this))
+            .collect(java.util.stream.Collectors.toList()), expr.getLocation());
+    }
+
+
+    @Override
+    public Type visitThrowExpr(ThrowExpr expr) {
+        expr.getException().accept(this);
+        return new PrimitiveType("Void");
+    }
+
+
+    @Override
+    public Type visitTryExpr(TryExpr expr) {
+        return new PrimitiveType("Void");
+    }
+
+
+    @Override
+    public Type visitTupleAccessExpr(TupleAccessExpr expr) {
+        return new PrimitiveType("Void");
+    }
+    
+    @Override
+    public Type visitStructLiteralExpr(com.firefly.compiler.ast.expr.StructLiteralExpr expr) {
+        // Return the struct type
+        return new com.firefly.compiler.ast.type.NamedType(expr.getStructName());
+    }
+
+
+    
+    @Override
+    public Type visitTypeAliasDecl(com.firefly.compiler.ast.decl.TypeAliasDecl decl) {
+        // Type alias resolves to its target type
+        return decl.getTargetType();
+    }
+    
+    @Override
+    public Type visitAwaitExpr(com.firefly.compiler.ast.expr.AwaitExpr expr) {
+        // Await unwraps Future<T> to T
+        // For now, return the type of the future expression
+        return expr.getFuture().accept(this);
+    }
+    
+    @Override
+    public Type visitSafeAccessExpr(com.firefly.compiler.ast.expr.SafeAccessExpr expr) {
+        // Safe access returns an optional value; we cannot resolve field types yet,
+        // so approximate as Optional<Any>
+        expr.getObject().accept(this);
+        return new OptionalType(new NamedType("Any"));
+    }
+    
+    @Override
+    public Type visitForceUnwrapExpr(com.firefly.compiler.ast.expr.ForceUnwrapExpr expr) {
+        // Force unwrap removes optional wrapper
+        Type exprType = expr.getExpression().accept(this);
+        if (exprType instanceof OptionalType) {
+            return ((OptionalType) exprType).getInnerType();
+        }
+        return exprType;
+    }
+    
+    @Override
+    public Type visitExceptionDecl(com.firefly.compiler.ast.decl.ExceptionDecl decl) {
+        // Exception declaration returns the exception type
+        return new NamedType(decl.getName());
     }
 }

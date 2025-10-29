@@ -60,6 +60,22 @@ public class Diagnostic {
         return suggestion != null && !suggestion.isEmpty();
     }
     
+    public boolean isError() {
+        return severity == Severity.ERROR;
+    }
+    
+    public boolean isWarning() {
+        return severity == Severity.WARNING;
+    }
+    
+    public boolean isInfo() {
+        return severity == Severity.INFO;
+    }
+    
+    public String getHint() {
+        return suggestion;
+    }
+    
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();

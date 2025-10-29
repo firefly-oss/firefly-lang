@@ -1,6 +1,6 @@
 package com.firefly.compiler.semantic;
 
-import com.firefly.compiler.ast.ImportDeclaration;
+import com.firefly.compiler.ast.UseDeclaration;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -26,7 +26,7 @@ public class ImportResolver {
     /**
      * Add an import declaration to the resolver
      */
-    public void addImport(ImportDeclaration importDecl) {
+    public void addImport(UseDeclaration importDecl) {
         String modulePath = importDecl.getModulePath();
         
         if (importDecl.isWildcard()) {

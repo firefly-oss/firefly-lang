@@ -40,14 +40,150 @@ public class SymbolTableBuilder implements AstVisitor<Void> {
     }
     
     @Override
-    public Void visitImportDeclaration(ImportDeclaration decl) {
-        // TODO: Resolve imports and add to symbol table
+    public Void visitUseDeclaration(UseDeclaration decl) {
+        // Imports are processed separately during compilation
+        // This is mainly for documentation purposes
+        // In full implementation, would track import aliases
         return null;
     }
     
     @Override
     public Void visitClassDecl(ClassDecl decl) {
-        // TODO: Implement class symbol table building for v0.3.0
+        // Define class type in current scope
+        try {
+            currentScope.define(
+                decl.getName(),
+                new NamedType(decl.getName()),
+                SymbolTable.SymbolKind.STRUCT,
+                false
+            );
+        } catch (SemanticException e) {
+            reporter.error("STB009",
+                "Class '" + decl.getName() + "' is already defined in this scope",
+                decl.getLocation());
+        }
+        
+        // Enter class scope for methods and fields
+        currentScope = currentScope.enterScope();
+        
+        // Add 'this' reference (implicit in Java/OOP)
+        try {
+            currentScope.define(
+                "this",
+                new NamedType(decl.getName()),
+                SymbolTable.SymbolKind.PARAMETER,
+                false
+            );
+        } catch (SemanticException e) {
+            // this is always implicitly available
+        }
+        
+        // Add fields to scope
+        for (ClassDecl.FieldDecl field : decl.getFields()) {
+            try {
+                currentScope.define(
+                    field.getName(),
+                    field.getType(),
+                    SymbolTable.SymbolKind.FIELD,
+                    field.isMutable()
+                );
+            } catch (SemanticException e) {
+                reporter.error("STB010",
+                    "Field '" + field.getName() + "' is already defined",
+                    decl.getLocation());
+            }
+        }
+        
+        // Pre-declare methods in class scope for intra-class calls and recursion
+        for (ClassDecl.MethodDecl method : decl.getMethods()) {
+            Type returnType = method.getReturnType().orElse(new PrimitiveType("Void"));
+            try {
+                currentScope.define(
+                    method.getName(),
+                    returnType,
+                    SymbolTable.SymbolKind.FUNCTION,
+                    false,
+                    method.isAsync()
+                );
+            } catch (SemanticException e) {
+                reporter.error("STB015",
+                    "Method '" + method.getName() + "' is already defined",
+                    decl.getLocation());
+            }
+        }
+        
+        // Visit methods
+        for (ClassDecl.MethodDecl method : decl.getMethods()) {
+            // Enter method scope
+            currentScope = currentScope.enterScope();
+            
+            // Add 'this' reference in method scope
+            try {
+                currentScope.define(
+                    "this",
+                    new NamedType(decl.getName()),
+                    SymbolTable.SymbolKind.PARAMETER,
+                    false
+                );
+            } catch (SemanticException e) {
+                // this is always implicitly available
+            }
+            
+            // Add method parameters
+            for (FunctionDecl.Parameter param : method.getParameters()) {
+                try {
+                    currentScope.define(
+                        param.getName(),
+                        param.getType(),
+                        SymbolTable.SymbolKind.PARAMETER,
+                        param.isMutable()
+                    );
+                } catch (SemanticException e) {
+                    reporter.error("STB011",
+                        "Parameter '" + param.getName() + "' is already defined",
+                        decl.getLocation());
+                }
+            }
+            
+            // Visit method body
+            method.getBody().accept(this);
+            
+            // Exit method scope
+            currentScope = currentScope.exitScope();
+        }
+        
+        // Visit constructor if present
+        if (decl.getConstructor().isPresent()) {
+            ClassDecl.ConstructorDecl constructor = decl.getConstructor().get();
+            
+            // Enter constructor scope
+            currentScope = currentScope.enterScope();
+            
+            // Add constructor parameters
+            for (FunctionDecl.Parameter param : constructor.getParameters()) {
+                try {
+                    currentScope.define(
+                        param.getName(),
+                        param.getType(),
+                        SymbolTable.SymbolKind.PARAMETER,
+                        param.isMutable()
+                    );
+                } catch (SemanticException e) {
+                    reporter.error("STB012",
+                        "Parameter '" + param.getName() + "' is already defined",
+                        decl.getLocation());
+                }
+            }
+            
+            // Visit constructor body
+            constructor.getBody().accept(this);
+            
+            // Exit constructor scope
+            currentScope = currentScope.exitScope();
+        }
+        
+        // Exit class scope
+        currentScope = currentScope.exitScope();
         return null;
     }
     
@@ -58,9 +194,81 @@ public class SymbolTableBuilder implements AstVisitor<Void> {
     }
     
     @Override
+    public Void visitActorDecl(ActorDecl decl) {
+        // Define actor type in current scope
+        try {
+            currentScope.define(
+                decl.getName(),
+                new NamedType(decl.getName()),
+                SymbolTable.SymbolKind.STRUCT,
+                false
+            );
+        } catch (SemanticException e) {
+            reporter.error("STB013",
+                "Actor '" + decl.getName() + "' is already defined in this scope",
+                decl.getLocation());
+        }
+        
+        // Enter actor scope for fields and receive block
+        currentScope = currentScope.enterScope();
+        
+        // Add 'self' reference (implicit in actor)
+        try {
+            currentScope.define(
+                "self",
+                new NamedType(decl.getName()),
+                SymbolTable.SymbolKind.PARAMETER,
+                false
+            );
+        } catch (SemanticException e) {
+            // self is always implicitly available
+        }
+        
+        // Add actor fields to scope
+        for (FieldDecl field : decl.getFields()) {
+            try {
+                currentScope.define(
+                    field.getName(),
+                    field.getType(),
+                    SymbolTable.SymbolKind.FIELD,
+                    field.isMutable()
+                );
+            } catch (SemanticException e) {
+                reporter.error("STB014",
+                    "Field '" + field.getName() + "' is already defined",
+                    field.getLocation());
+            }
+        }
+        
+        // Visit init block
+        if (decl.getInitBlock() != null) {
+            decl.getInitBlock().accept(this);
+        }
+        
+        // Visit receive cases
+        for (ActorDecl.ReceiveCase receiveCase : decl.getReceiveCases()) {
+            // Each case gets its own scope for pattern bindings
+            currentScope = currentScope.enterScope();
+            
+            // Extract pattern variables
+            extractPatternVariables(receiveCase.getPattern());
+            
+            // Visit case body
+            receiveCase.getExpression().accept(this);
+            
+            // Exit case scope
+            currentScope = currentScope.exitScope();
+        }
+        
+        // Exit actor scope
+        currentScope = currentScope.exitScope();
+        return null;
+    }
+    
+    @Override
     public Void visitFunctionDecl(FunctionDecl decl) {
         // Define function in current scope
-        Type returnType = decl.getReturnType().orElse(new PrimitiveType("Unit"));
+        Type returnType = decl.getReturnType().orElse(new PrimitiveType("Void"));
         
         try {
             currentScope.define(
@@ -122,6 +330,24 @@ public class SymbolTableBuilder implements AstVisitor<Void> {
     }
     
     @Override
+    public Void visitSparkDecl(SparkDecl decl) {
+        // Spark is like a struct but immutable with superpowers
+        try {
+            currentScope.define(
+                decl.getName(),
+                new NamedType(decl.getName()),
+                SymbolTable.SymbolKind.STRUCT, // Use STRUCT kind for now
+                false
+            );
+        } catch (SemanticException e) {
+            reporter.error("STB008",
+                "Type '" + decl.getName() + "' is already defined in this scope",
+                decl.getLocation());
+        }
+        return null;
+    }
+    
+    @Override
     public Void visitDataDecl(DataDecl decl) {
         try {
             currentScope.define(
@@ -173,7 +399,7 @@ public class SymbolTableBuilder implements AstVisitor<Void> {
             
             // Try to infer type from initializer
             // For now, use Unit as placeholder
-            Type varType = new PrimitiveType("Unit");
+            Type varType = new PrimitiveType("Void");
             
             try {
                 String varName = extractPatternName(stmt.getPattern());
@@ -320,7 +546,7 @@ public class SymbolTableBuilder implements AstVisitor<Void> {
             try {
                 currentScope.define(
                     param,
-                    new PrimitiveType("Unit"), // Placeholder
+                    new PrimitiveType("Void"), // Placeholder
                     SymbolTable.SymbolKind.PARAMETER,
                     false
                 );
@@ -461,10 +687,160 @@ public class SymbolTableBuilder implements AstVisitor<Void> {
     
     private String extractPatternName(Pattern pattern) {
         // Simplified pattern name extraction
-        // TODO: Handle complex patterns
+        if (pattern instanceof com.firefly.compiler.ast.pattern.TypedVariablePattern) {
+            return ((com.firefly.compiler.ast.pattern.TypedVariablePattern) pattern).getName();
+        }
         if (pattern instanceof com.firefly.compiler.ast.pattern.VariablePattern) {
             return ((com.firefly.compiler.ast.pattern.VariablePattern) pattern).getName();
         }
+        return null;
+    }
+    
+    /**
+     * Extract variables from a pattern and add them to the current scope.
+     */
+    private void extractPatternVariables(Pattern pattern) {
+        if (pattern instanceof com.firefly.compiler.ast.pattern.TypedVariablePattern) {
+            // Typed variable pattern
+            com.firefly.compiler.ast.pattern.TypedVariablePattern typedPattern = 
+                (com.firefly.compiler.ast.pattern.TypedVariablePattern) pattern;
+            try {
+                currentScope.define(
+                    typedPattern.getName(),
+                    typedPattern.getType(),
+                    SymbolTable.SymbolKind.VARIABLE,
+                    typedPattern.isMutable()
+                );
+            } catch (SemanticException e) {
+                // Variable already defined, skip
+            }
+        } else if (pattern instanceof com.firefly.compiler.ast.pattern.VariablePattern) {
+            // Simple variable pattern
+            com.firefly.compiler.ast.pattern.VariablePattern varPattern = 
+                (com.firefly.compiler.ast.pattern.VariablePattern) pattern;
+            try {
+                currentScope.define(
+                    varPattern.getName(),
+                    new PrimitiveType("Any"),
+                    SymbolTable.SymbolKind.VARIABLE,
+                    false
+                );
+            } catch (SemanticException e) {
+                // Variable already defined, skip
+            }
+        } else if (pattern instanceof com.firefly.compiler.ast.pattern.StructPattern) {
+            // Struct pattern: extract from field patterns
+            com.firefly.compiler.ast.pattern.StructPattern structPattern = 
+                (com.firefly.compiler.ast.pattern.StructPattern) pattern;
+            for (com.firefly.compiler.ast.pattern.StructPattern.FieldPattern fieldPattern : structPattern.getFields()) {
+                if (fieldPattern.getPattern() != null) {
+                    extractPatternVariables(fieldPattern.getPattern());
+                }
+            }
+        } else if (pattern instanceof com.firefly.compiler.ast.pattern.TuplePattern) {
+            // Tuple pattern: extract from each element
+            com.firefly.compiler.ast.pattern.TuplePattern tuplePattern = 
+                (com.firefly.compiler.ast.pattern.TuplePattern) pattern;
+            for (Pattern elementPattern : tuplePattern.getElements()) {
+                extractPatternVariables(elementPattern);
+            }
+        } else if (pattern instanceof com.firefly.compiler.ast.pattern.ArrayPattern) {
+            // Array pattern: extract from each element
+            com.firefly.compiler.ast.pattern.ArrayPattern arrayPattern = 
+                (com.firefly.compiler.ast.pattern.ArrayPattern) pattern;
+            for (Pattern elementPattern : arrayPattern.getElements()) {
+                extractPatternVariables(elementPattern);
+            }
+        }
+        // Literal patterns don't introduce variables
+    }
+
+    @Override
+    public Void visitTupleType(TupleType type) {
+        return null;
+    }
+
+
+    @Override
+    public Void visitTypeParameter(TypeParameter type) {
+        return null;
+    }
+
+
+    @Override
+    public Void visitGenericType(GenericType type) {
+        return null;
+    }
+
+
+    @Override
+    public Void visitTupleLiteralExpr(TupleLiteralExpr expr) {
+        return null;
+    }
+
+
+    @Override
+    public Void visitThrowExpr(ThrowExpr expr) {
+        return null;
+    }
+
+
+    @Override
+    public Void visitTryExpr(TryExpr expr) {
+        return null;
+    }
+
+
+    @Override
+    public Void visitTupleAccessExpr(TupleAccessExpr expr) {
+        return null;
+    }
+    
+    @Override
+    public Void visitStructLiteralExpr(com.firefly.compiler.ast.expr.StructLiteralExpr expr) {
+        for (com.firefly.compiler.ast.expr.StructLiteralExpr.FieldInit field : expr.getFieldInits()) {
+            field.getValue().accept(this);
+        }
+        return null;
+    }
+    
+    @Override
+    public Void visitMapLiteralExpr(com.firefly.compiler.ast.expr.MapLiteralExpr expr) {
+        for (var entry : expr.getEntries().entrySet()) {
+            entry.getKey().accept(this);
+            entry.getValue().accept(this);
+        }
+        return null;
+    }
+
+
+    
+    @Override
+    public Void visitTypeAliasDecl(com.firefly.compiler.ast.decl.TypeAliasDecl decl) {
+        return null;
+    }
+    
+    @Override
+    public Void visitExceptionDecl(com.firefly.compiler.ast.decl.ExceptionDecl decl) {
+        // Exception declarations register as types
+        // Just like class/struct, don't need special symbol table handling here
+        return null;
+    }
+    
+    @Override
+    public Void visitAwaitExpr(com.firefly.compiler.ast.expr.AwaitExpr expr) {
+        return null;
+    }
+    
+    @Override
+    public Void visitSafeAccessExpr(com.firefly.compiler.ast.expr.SafeAccessExpr expr) {
+        expr.getObject().accept(this);
+        return null;
+    }
+    
+    @Override
+    public Void visitForceUnwrapExpr(com.firefly.compiler.ast.expr.ForceUnwrapExpr expr) {
+        expr.getExpression().accept(this);
         return null;
     }
 }

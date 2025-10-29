@@ -41,7 +41,7 @@ public class SyntaxChecker implements AstVisitor<Void> {
     @Override
     public Void visitCompilationUnit(CompilationUnit unit) {
         // Check imports
-        for (ImportDeclaration imp : unit.getImports()) {
+        for (UseDeclaration imp : unit.getImports()) {
             imp.accept(this);
         }
         
@@ -54,7 +54,7 @@ public class SyntaxChecker implements AstVisitor<Void> {
     }
     
     @Override
-    public Void visitImportDeclaration(ImportDeclaration decl) {
+    public Void visitUseDeclaration(UseDeclaration decl) {
         // Validate import path
         if (decl.getModulePath().isEmpty()) {
             reporter.error("FF001", "Import path cannot be empty", decl.getLocation());
@@ -67,13 +67,127 @@ public class SyntaxChecker implements AstVisitor<Void> {
     
     @Override
     public Void visitClassDecl(ClassDecl decl) {
-        // TODO: Implement class syntax checking for v0.3.0
+        // Check for duplicate class names
+        if (declaredTypes.contains(decl.getName())) {
+            reporter.error("FF007",
+                "Duplicate class declaration: " + decl.getName(),
+                decl.getLocation());
+        } else {
+            declaredTypes.add(decl.getName());
+        }
+        
+        // Check fields
+        Set<String> fieldNames = new HashSet<>();
+        for (ClassDecl.FieldDecl field : decl.getFields()) {
+            if (fieldNames.contains(field.getName())) {
+                reporter.error("FF008",
+                    "Duplicate field name: " + field.getName(),
+                    decl.getLocation());
+            }
+            fieldNames.add(field.getName());
+            field.getType().accept(this);
+        }
+        
+        // Check methods
+        Set<String> methodNames = new HashSet<>();
+        for (ClassDecl.MethodDecl method : decl.getMethods()) {
+            if (methodNames.contains(method.getName())) {
+                reporter.error("FF009",
+                    "Duplicate method name: " + method.getName(),
+                    decl.getLocation());
+            }
+            methodNames.add(method.getName());
+            
+            // Check method parameters for duplicates
+            Set<String> paramNames = new HashSet<>();
+            for (FunctionDecl.Parameter param : method.getParameters()) {
+                if (paramNames.contains(param.getName())) {
+                    reporter.error("FF010",
+                        "Duplicate parameter name: " + param.getName(),
+                        decl.getLocation());
+                }
+                paramNames.add(param.getName());
+                param.getType().accept(this);
+            }
+            
+            // Check return type
+            if (method.getReturnType().isPresent()) {
+                method.getReturnType().get().accept(this);
+            }
+            
+            // Manage async context for method bodies
+            boolean wasAsync = inAsyncContext;
+            if (method.isAsync()) {
+                inAsyncContext = true;
+            }
+            
+            // Check method body
+            method.getBody().accept(this);
+            
+            // Restore async context
+            inAsyncContext = wasAsync;
+        }
+        
+        // Check constructor if present
+        if (decl.getConstructor().isPresent()) {
+            ClassDecl.ConstructorDecl constructor = decl.getConstructor().get();
+            
+            Set<String> ctorParamNames = new HashSet<>();
+            for (FunctionDecl.Parameter param : constructor.getParameters()) {
+                if (ctorParamNames.contains(param.getName())) {
+                    reporter.error("FF011",
+                        "Duplicate constructor parameter name: " + param.getName(),
+                        decl.getLocation());
+                }
+                ctorParamNames.add(param.getName());
+                param.getType().accept(this);
+            }
+            
+            constructor.getBody().accept(this);
+        }
+        
         return null;
     }
     
     @Override
     public Void visitInterfaceDecl(InterfaceDecl decl) {
         // Syntax check interface
+        return null;
+    }
+    
+    @Override
+    public Void visitActorDecl(ActorDecl decl) {
+        // Check for duplicate actor names
+        if (declaredTypes.contains(decl.getName())) {
+            reporter.error("FF012",
+                "Duplicate actor declaration: " + decl.getName(),
+                decl.getLocation());
+        } else {
+            declaredTypes.add(decl.getName());
+        }
+        
+        // Check fields
+        Set<String> fieldNames = new HashSet<>();
+        for (FieldDecl field : decl.getFields()) {
+            if (fieldNames.contains(field.getName())) {
+                reporter.error("FF013",
+                    "Duplicate actor field name: " + field.getName(),
+                    decl.getLocation());
+            }
+            fieldNames.add(field.getName());
+            field.getType().accept(this);
+        }
+        
+        // Check init block
+        if (decl.getInitBlock() != null) {
+            decl.getInitBlock().accept(this);
+        }
+        
+        // Check receive cases
+        for (ActorDecl.ReceiveCase receiveCase : decl.getReceiveCases()) {
+            receiveCase.getExpression().accept(this);
+        }
+        
         return null;
     }
     
@@ -161,6 +275,40 @@ public class SyntaxChecker implements AstVisitor<Void> {
     }
     
     @Override
+    public Void visitSparkDecl(SparkDecl decl) {
+        // Check for duplicate spark names
+        if (declaredTypes.contains(decl.getName())) {
+            reporter.error("FF004",
+                "Duplicate type declaration: " + decl.getName(),
+                decl.getLocation(),
+                "Rename this type or remove the duplicate");
+        } else {
+            declaredTypes.add(decl.getName());
+        }
+        
+        // Check fields
+        Set<String> fieldNames = new HashSet<>();
+        for (SparkDecl.SparkField field : decl.getFields()) {
+            if (fieldNames.contains(field.getName())) {
+                reporter.error("FF005",
+                    "Duplicate field name: " + field.getName(),
+                    decl.getLocation());
+            }
+            fieldNames.add(field.getName());
+            
+            // Check field type
+            field.getType().accept(this);
+            
+            // Check default value
+            if (field.getDefaultValue().isPresent()) {
+                field.getDefaultValue().get().accept(this);
+            }
+        }
+        
+        return null;
+    }
+    
+    @Override
     public Void visitDataDecl(DataDecl decl) {
         // Check for duplicate data names
         if (declaredTypes.contains(decl.getName())) {
@@ -200,6 +348,18 @@ public class SyntaxChecker implements AstVisitor<Void> {
             declaredTypes.add(decl.getName());
         }
         
+        return null;
+    }
+    
+    @Override
+    public Void visitExceptionDecl(com.firefly.compiler.ast.decl.ExceptionDecl decl) {
+        if (declaredTypes.contains(decl.getName())) {
+            reporter.error("FF004",
+                "Duplicate exception declaration: " + decl.getName(),
+                null);  // Location not stored in ExceptionDecl yet
+        } else {
+            declaredTypes.add(decl.getName());
+        }
         return null;
     }
     
@@ -511,6 +671,97 @@ public class SyntaxChecker implements AstVisitor<Void> {
             paramType.accept(this);
         }
         type.getReturnType().accept(this);
+        return null;
+    }
+
+    @Override
+    public Void visitTupleType(TupleType type) {
+        return null;
+    }
+
+
+    @Override
+    public Void visitTypeParameter(TypeParameter type) {
+        return null;
+    }
+
+
+    @Override
+    public Void visitGenericType(GenericType type) {
+        return null;
+    }
+
+
+    @Override
+    public Void visitTupleLiteralExpr(TupleLiteralExpr expr) {
+        return null;
+    }
+
+
+    @Override
+    public Void visitThrowExpr(ThrowExpr expr) {
+        return null;
+    }
+
+
+    @Override
+    public Void visitTryExpr(TryExpr expr) {
+        return null;
+    }
+
+
+    @Override
+    public Void visitTupleAccessExpr(TupleAccessExpr expr) {
+        return null;
+    }
+    
+    @Override
+    public Void visitStructLiteralExpr(com.firefly.compiler.ast.expr.StructLiteralExpr expr) {
+        for (com.firefly.compiler.ast.expr.StructLiteralExpr.FieldInit field : expr.getFieldInits()) {
+            field.getValue().accept(this);
+        }
+        return null;
+    }
+    
+    @Override
+    public Void visitMapLiteralExpr(com.firefly.compiler.ast.expr.MapLiteralExpr expr) {
+        for (var entry : expr.getEntries().entrySet()) {
+            entry.getKey().accept(this);
+            entry.getValue().accept(this);
+        }
+        return null;
+    }
+
+
+    
+    @Override
+    public Void visitTypeAliasDecl(com.firefly.compiler.ast.decl.TypeAliasDecl decl) {
+        return null;
+    }
+    
+    @Override
+    public Void visitAwaitExpr(com.firefly.compiler.ast.expr.AwaitExpr expr) {
+        // Check await usage
+        if (!inAsyncContext) {
+            reporter.error("FF007",
+                "await can only be used in async functions",
+                expr.getLocation(),
+                "Add 'async' keyword to the function declaration");
+        }
+        
+        expr.getFuture().accept(this);
+        return null;
+    }
+    
+    @Override
+    public Void visitSafeAccessExpr(com.firefly.compiler.ast.expr.SafeAccessExpr expr) {
+        expr.getObject().accept(this);
+        return null;
+    }
+    
+    @Override
+    public Void visitForceUnwrapExpr(com.firefly.compiler.ast.expr.ForceUnwrapExpr expr) {
+        expr.getExpression().accept(this);
         return null;
     }
 }
