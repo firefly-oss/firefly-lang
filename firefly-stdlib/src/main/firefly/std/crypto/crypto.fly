@@ -1,0 +1,310 @@
+/**
+ * Firefly Standard Library - Cryptography Module
+ * 
+ * Provides cryptographic operations including hashing, encryption, and key generation.
+ * 
+ * @module firefly::std::crypto
+ * @version 0.1.0
+ */
+
+module firefly::std::crypto
+
+use firefly::std::result::{Result, Ok, Err}
+use firefly::std::option::{Option, Some, None}
+use java::security::MessageDigest
+use java::security::SecureRandom
+use java::security::KeyPairGenerator
+use java::security::KeyPair
+use java::security::Key
+use javax::crypto::Cipher
+use javax::crypto::KeyGenerator
+use javax::crypto::SecretKey
+use javax::crypto::spec::SecretKeySpec
+use javax::crypto::spec::IvParameterSpec
+use javax::crypto::Mac
+use java::util::Base64
+use java::nio::charset::StandardCharsets
+
+// ============================================================================
+// Hashing Functions
+// ============================================================================
+
+/**
+ * Computes the MD5 hash of a string.
+ * 
+ * @param input The input string
+ * @return The MD5 hash as a hex string
+ * 
+ * @example
+ *   let hash = crypto.md5("hello world");
+ */
+fn md5(input: String) -> String = {
+    try {
+        let digest = MessageDigest.getInstance("MD5");
+        let bytes = digest.digest(input.getBytes(StandardCharsets.UTF_8));
+        bytesToHex(bytes)
+    } catch (e) {
+        ""
+    }
+}
+
+/**
+ * Computes the SHA-1 hash of a string.
+ * 
+ * @param input The input string
+ * @return The SHA-1 hash as a hex string
+ */
+fn sha1(input: String) -> String = {
+    try {
+        let digest = MessageDigest.getInstance("SHA-1");
+        let bytes = digest.digest(input.getBytes(StandardCharsets.UTF_8));
+        bytesToHex(bytes)
+    } catch (e) {
+        ""
+    }
+}
+
+/**
+ * Computes the SHA-256 hash of a string.
+ * 
+ * @param input The input string
+ * @return The SHA-256 hash as a hex string
+ * 
+ * @example
+ *   let hash = crypto.sha256("hello world");
+ */
+fn sha256(input: String) -> String = {
+    try {
+        let digest = MessageDigest.getInstance("SHA-256");
+        let bytes = digest.digest(input.getBytes(StandardCharsets.UTF_8));
+        bytesToHex(bytes)
+    } catch (e) {
+        ""
+    }
+}
+
+/**
+ * Computes the SHA-512 hash of a string.
+ * 
+ * @param input The input string
+ * @return The SHA-512 hash as a hex string
+ */
+fn sha512(input: String) -> String = {
+    try {
+        let digest = MessageDigest.getInstance("SHA-512");
+        let bytes = digest.digest(input.getBytes(StandardCharsets.UTF_8));
+        bytesToHex(bytes)
+    } catch (e) {
+        ""
+    }
+}
+
+/**
+ * Computes HMAC-SHA256 of a string with a secret key.
+ * 
+ * @param input The input string
+ * @param secret The secret key
+ * @return The HMAC as a hex string
+ * 
+ * @example
+ *   let hmac = crypto.hmacSha256("message", "secret_key");
+ */
+fn hmacSha256(input: String, secret: String) -> String = {
+    try {
+        let mac = Mac.getInstance("HmacSHA256");
+        let secretKey = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+        mac.init(secretKey);
+        let bytes = mac.doFinal(input.getBytes(StandardCharsets.UTF_8));
+        bytesToHex(bytes)
+    } catch (e) {
+        ""
+    }
+}
+
+// ============================================================================
+// Encryption/Decryption (AES)
+// ============================================================================
+
+/**
+ * Encrypts a string using AES-128.
+ * 
+ * @param plaintext The text to encrypt
+ * @param key The encryption key (must be 16 bytes)
+ * @return Result containing the encrypted data as Base64, or an error
+ * 
+ * @example
+ *   let encrypted = crypto.encryptAES("secret message", "1234567890123456");
+ */
+fn encryptAES(plaintext: String, key: String) -> Result = {
+    try {
+        let cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
+        let secretKey = new SecretKeySpec(key.getBytes(StandardCharsets.UTF_8), "AES");
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey);
+        let encrypted = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
+        let encoded = Base64.getEncoder().encodeToString(encrypted);
+        Ok(encoded)
+    } catch (e) {
+        Err("Encryption failed: " + e.getMessage())
+    }
+}
+
+/**
+ * Decrypts AES-encrypted data.
+ * 
+ * @param ciphertext The encrypted data (Base64 encoded)
+ * @param key The decryption key (must be 16 bytes)
+ * @return Result containing the decrypted plaintext, or an error
+ */
+fn decryptAES(ciphertext: String, key: String) -> Result = {
+    try {
+        let cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
+        let secretKey = new SecretKeySpec(key.getBytes(StandardCharsets.UTF_8), "AES");
+        cipher.init(Cipher.DECRYPT_MODE, secretKey);
+        let decoded = Base64.getDecoder().decode(ciphertext);
+        let decrypted = cipher.doFinal(decoded);
+        let plaintext = new java::lang::String(decrypted, StandardCharsets.UTF_8);
+        Ok(plaintext)
+    } catch (e) {
+        Err("Decryption failed: " + e.getMessage())
+    }
+}
+
+/**
+ * Encrypts a string using AES-256 with CBC mode.
+ * 
+ * @param plaintext The text to encrypt
+ * @param key The encryption key (must be 32 bytes)
+ * @param iv The initialization vector (must be 16 bytes)
+ * @return Result containing the encrypted data as Base64, or an error
+ */
+fn encryptAES256(plaintext: String, key: String, iv: String) -> Result = {
+    try {
+        let cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+        let secretKey = new SecretKeySpec(key.getBytes(StandardCharsets.UTF_8), "AES");
+        let ivSpec = new IvParameterSpec(iv.getBytes(StandardCharsets.UTF_8));
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivSpec);
+        let encrypted = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
+        let encoded = Base64.getEncoder().encodeToString(encrypted);
+        Ok(encoded)
+    } catch (e) {
+        Err("Encryption failed: " + e.getMessage())
+    }
+}
+
+/**
+ * Decrypts AES-256 encrypted data with CBC mode.
+ * 
+ * @param ciphertext The encrypted data (Base64 encoded)
+ * @param key The decryption key (must be 32 bytes)
+ * @param iv The initialization vector (must be 16 bytes)
+ * @return Result containing the decrypted plaintext, or an error
+ */
+fn decryptAES256(ciphertext: String, key: String, iv: String) -> Result = {
+    try {
+        let cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+        let secretKey = new SecretKeySpec(key.getBytes(StandardCharsets.UTF_8), "AES");
+        let ivSpec = new IvParameterSpec(iv.getBytes(StandardCharsets.UTF_8));
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, ivSpec);
+        let decoded = Base64.getDecoder().decode(ciphertext);
+        let decrypted = cipher.doFinal(decoded);
+        let plaintext = new java::lang::String(decrypted, StandardCharsets.UTF_8);
+        Ok(plaintext)
+    } catch (e) {
+        Err("Decryption failed: " + e.getMessage())
+    }
+}
+
+// ============================================================================
+// Random Number Generation
+// ============================================================================
+
+/**
+ * Generates a cryptographically secure random byte array.
+ * 
+ * @param length Number of bytes to generate
+ * @return The random bytes
+ */
+fn randomBytes(length: Int) -> Object = {
+    let random = new SecureRandom();
+    let bytes = new java::lang::Byte[length];
+    random.nextBytes(bytes);
+    bytes
+}
+
+/**
+ * Generates a cryptographically secure random string (Base64 encoded).
+ * 
+ * @param length Number of random bytes (before encoding)
+ * @return The random string (Base64 encoded)
+ * 
+ * @example
+ *   let token = crypto.randomString(32); // 32 random bytes, Base64 encoded
+ */
+fn randomString(length: Int) -> String = {
+    let bytes = randomBytes(length);
+    Base64.getEncoder().encodeToString(bytes)
+}
+
+/**
+ * Generates a cryptographically secure random integer.
+ * 
+ * @return A random integer
+ */
+fn randomInt() -> Int = {
+    let random = new SecureRandom();
+    random.nextInt()
+}
+
+/**
+ * Generates a cryptographically secure random integer within a range.
+ * 
+ * @param bound The upper bound (exclusive)
+ * @return A random integer between 0 (inclusive) and bound (exclusive)
+ */
+fn randomIntBound(bound: Int) -> Int = {
+    let random = new SecureRandom();
+    random.nextInt(bound)
+}
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
+/**
+ * Converts a byte array to a hexadecimal string.
+ * 
+ * @param bytes The byte array
+ * @return The hex string
+ */
+fn bytesToHex(bytes: Object) -> String = {
+    let sb = new java::lang::StringBuilder();
+    let i = 0;
+    while (i < bytes.length) {
+        let b = bytes[i];
+        let hex = java::lang::Integer.toHexString(255 & b);
+        if (hex.length() == 1) {
+            sb.append('0');
+        }
+        sb.append(hex);
+        i = i + 1;
+    }
+    sb.toString()
+}
+
+/**
+ * Converts a hexadecimal string to a byte array.
+ * 
+ * @param hex The hex string
+ * @return The byte array
+ */
+fn hexToBytes(hex: String) -> Object = {
+    let len = hex.length();
+    let data = new java::lang::Byte[len / 2];
+    let i = 0;
+    while (i < len) {
+        data[i / 2] = java::lang::Integer.parseInt(hex.substring(i, i + 2), 16);
+        i = i + 2;
+    }
+    data
+}
+

@@ -1,0 +1,394 @@
+/**
+ * Firefly Standard Library - Concurrency Module
+ * 
+ * Provides concurrency primitives including threads, executors, futures, and synchronization.
+ * 
+ * @module firefly::std::concurrent
+ * @version 0.1.0
+ */
+
+module firefly::std::concurrent
+
+use firefly::std::result::{Result, Ok, Err}
+use firefly::std::option::{Option, Some, None}
+use java::lang::Thread
+use java::lang::Runnable
+use java::util::concurrent::ExecutorService
+use java::util::concurrent::Executors
+use java::util::concurrent::Future
+use java::util::concurrent::Callable
+use java::util::concurrent::TimeUnit
+use java::util::concurrent::CountDownLatch
+use java::util::concurrent::CyclicBarrier
+use java::util::concurrent::Semaphore
+use java::util::concurrent::locks::ReentrantLock
+use java::util::concurrent::locks::ReadWriteLock
+use java::util::concurrent::locks::ReentrantReadWriteLock
+use java::util::concurrent::atomic::AtomicInteger
+use java::util::concurrent::atomic::AtomicLong
+use java::util::concurrent::atomic::AtomicBoolean
+use java::util::concurrent::ConcurrentHashMap
+use java::util::concurrent::BlockingQueue
+use java::util::concurrent::LinkedBlockingQueue
+use java::util::concurrent::ArrayBlockingQueue
+
+// ============================================================================
+// Thread Operations
+// ============================================================================
+
+/**
+ * Sleeps the current thread for the specified number of milliseconds.
+ * 
+ * @param millis Number of milliseconds to sleep
+ * 
+ * @example
+ *   concurrent.sleep(1000); // Sleep for 1 second
+ */
+fn sleep(millis: Long) -> Void = {
+    try {
+        Thread.sleep(millis);
+    } catch (e) {
+        // Interrupted
+    }
+}
+
+/**
+ * Gets the current thread.
+ * 
+ * @return The current Thread object
+ */
+fn currentThread() -> Thread = {
+    Thread.currentThread()
+}
+
+/**
+ * Gets the ID of the current thread.
+ * 
+ * @return The thread ID
+ */
+fn currentThreadId() -> Long = {
+    Thread.currentThread().getId()
+}
+
+/**
+ * Gets the name of the current thread.
+ * 
+ * @return The thread name
+ */
+fn currentThreadName() -> String = {
+    Thread.currentThread().getName()
+}
+
+/**
+ * Yields the current thread, allowing other threads to execute.
+ */
+fn yield() -> Void = {
+    Thread.yield();
+}
+
+// ============================================================================
+// Executor Services
+// ============================================================================
+
+/**
+ * Creates a fixed thread pool executor.
+ * 
+ * @param nThreads Number of threads in the pool
+ * @return ExecutorService with fixed thread pool
+ * 
+ * @example
+ *   let executor = concurrent.newFixedThreadPool(4);
+ */
+fn newFixedThreadPool(nThreads: Int) -> ExecutorService = {
+    Executors.newFixedThreadPool(nThreads)
+}
+
+/**
+ * Creates a cached thread pool executor.
+ * Creates new threads as needed, reuses previously constructed threads when available.
+ * 
+ * @return ExecutorService with cached thread pool
+ */
+fn newCachedThreadPool() -> ExecutorService = {
+    Executors.newCachedThreadPool()
+}
+
+/**
+ * Creates a single thread executor.
+ * 
+ * @return ExecutorService with single thread
+ */
+fn newSingleThreadExecutor() -> ExecutorService = {
+    Executors.newSingleThreadExecutor()
+}
+
+/**
+ * Creates a scheduled thread pool executor.
+ * 
+ * @param corePoolSize Number of threads to keep in the pool
+ * @return ScheduledExecutorService
+ */
+fn newScheduledThreadPool(corePoolSize: Int) -> Object = {
+    Executors.newScheduledThreadPool(corePoolSize)
+}
+
+/**
+ * Shuts down an executor service gracefully.
+ * 
+ * @param executor The ExecutorService to shutdown
+ */
+fn shutdown(executor: ExecutorService) -> Void = {
+    executor.shutdown();
+}
+
+/**
+ * Shuts down an executor service immediately.
+ * 
+ * @param executor The ExecutorService to shutdown
+ * @return List of tasks that were awaiting execution
+ */
+fn shutdownNow(executor: ExecutorService) -> Object = {
+    executor.shutdownNow()
+}
+
+/**
+ * Waits for an executor to terminate.
+ * 
+ * @param executor The ExecutorService to wait for
+ * @param timeout Timeout value
+ * @param unit TimeUnit for the timeout
+ * @return true if executor terminated, false if timeout elapsed
+ */
+fn awaitTermination(executor: ExecutorService, timeout: Long, unit: TimeUnit) -> Bool = {
+    try {
+        executor.awaitTermination(timeout, unit)
+    } catch (e) {
+        false
+    }
+}
+
+// ============================================================================
+// Atomic Operations
+// ============================================================================
+
+/**
+ * Creates a new AtomicInteger with initial value 0.
+ * 
+ * @return AtomicInteger
+ */
+fn newAtomicInt() -> AtomicInteger = {
+    new AtomicInteger()
+}
+
+/**
+ * Creates a new AtomicInteger with the specified initial value.
+ * 
+ * @param initialValue The initial value
+ * @return AtomicInteger
+ */
+fn newAtomicIntWith(initialValue: Int) -> AtomicInteger = {
+    new AtomicInteger(initialValue)
+}
+
+/**
+ * Creates a new AtomicLong with initial value 0.
+ * 
+ * @return AtomicLong
+ */
+fn newAtomicLong() -> AtomicLong = {
+    new AtomicLong()
+}
+
+/**
+ * Creates a new AtomicLong with the specified initial value.
+ * 
+ * @param initialValue The initial value
+ * @return AtomicLong
+ */
+fn newAtomicLongWith(initialValue: Long) -> AtomicLong = {
+    new AtomicLong(initialValue)
+}
+
+/**
+ * Creates a new AtomicBoolean with initial value false.
+ * 
+ * @return AtomicBoolean
+ */
+fn newAtomicBool() -> AtomicBoolean = {
+    new AtomicBoolean()
+}
+
+/**
+ * Creates a new AtomicBoolean with the specified initial value.
+ * 
+ * @param initialValue The initial value
+ * @return AtomicBoolean
+ */
+fn newAtomicBoolWith(initialValue: Bool) -> AtomicBoolean = {
+    new AtomicBoolean(initialValue)
+}
+
+// ============================================================================
+// Locks and Synchronization
+// ============================================================================
+
+/**
+ * Creates a new ReentrantLock.
+ * 
+ * @return ReentrantLock
+ * 
+ * @example
+ *   let lock = concurrent.newLock();
+ *   lock.lock();
+ *   try {
+ *     // Critical section
+ *   } finally {
+ *     lock.unlock();
+ *   }
+ */
+fn newLock() -> ReentrantLock = {
+    new ReentrantLock()
+}
+
+/**
+ * Creates a new fair ReentrantLock.
+ * 
+ * @return ReentrantLock with fair ordering
+ */
+fn newFairLock() -> ReentrantLock = {
+    new ReentrantLock(true)
+}
+
+/**
+ * Creates a new ReadWriteLock.
+ * 
+ * @return ReadWriteLock
+ */
+fn newReadWriteLock() -> ReadWriteLock = {
+    new ReentrantReadWriteLock()
+}
+
+/**
+ * Creates a new Semaphore with the specified number of permits.
+ * 
+ * @param permits Number of permits
+ * @return Semaphore
+ * 
+ * @example
+ *   let semaphore = concurrent.newSemaphore(3); // Allow 3 concurrent accesses
+ */
+fn newSemaphore(permits: Int) -> Semaphore = {
+    new Semaphore(permits)
+}
+
+/**
+ * Creates a new fair Semaphore.
+ * 
+ * @param permits Number of permits
+ * @return Semaphore with fair ordering
+ */
+fn newFairSemaphore(permits: Int) -> Semaphore = {
+    new Semaphore(permits, true)
+}
+
+/**
+ * Creates a new CountDownLatch.
+ * 
+ * @param count The initial count
+ * @return CountDownLatch
+ * 
+ * @example
+ *   let latch = concurrent.newCountDownLatch(3);
+ *   // Wait for 3 threads to complete
+ *   latch.await();
+ */
+fn newCountDownLatch(count: Int) -> CountDownLatch = {
+    new CountDownLatch(count)
+}
+
+/**
+ * Creates a new CyclicBarrier.
+ * 
+ * @param parties Number of parties that must await at the barrier
+ * @return CyclicBarrier
+ */
+fn newCyclicBarrier(parties: Int) -> CyclicBarrier = {
+    new CyclicBarrier(parties)
+}
+
+// ============================================================================
+// Concurrent Collections
+// ============================================================================
+
+/**
+ * Creates a new ConcurrentHashMap.
+ * 
+ * @return ConcurrentHashMap
+ */
+fn newConcurrentMap() -> ConcurrentHashMap = {
+    new ConcurrentHashMap()
+}
+
+/**
+ * Creates a new LinkedBlockingQueue (unbounded).
+ * 
+ * @return LinkedBlockingQueue
+ */
+fn newBlockingQueue() -> BlockingQueue = {
+    new LinkedBlockingQueue()
+}
+
+/**
+ * Creates a new ArrayBlockingQueue with the specified capacity.
+ * 
+ * @param capacity The queue capacity
+ * @return ArrayBlockingQueue
+ */
+fn newBoundedBlockingQueue(capacity: Int) -> BlockingQueue = {
+    new ArrayBlockingQueue(capacity)
+}
+
+/**
+ * Creates a new fair ArrayBlockingQueue.
+ * 
+ * @param capacity The queue capacity
+ * @return ArrayBlockingQueue with fair ordering
+ */
+fn newFairBlockingQueue(capacity: Int) -> BlockingQueue = {
+    new ArrayBlockingQueue(capacity, true)
+}
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
+/**
+ * Gets the number of available processors.
+ * 
+ * @return Number of processors available to the JVM
+ */
+fn availableProcessors() -> Int = {
+    java::lang::Runtime.getRuntime().availableProcessors()
+}
+
+/**
+ * Executes a task asynchronously and returns immediately.
+ * 
+ * @param executor The ExecutorService to use
+ * @param task The Runnable task to execute
+ */
+fn executeAsync(executor: ExecutorService, task: Runnable) -> Void = {
+    executor.execute(task);
+}
+
+/**
+ * Submits a task for execution and returns a Future.
+ * 
+ * @param executor The ExecutorService to use
+ * @param task The Callable task to submit
+ * @return Future representing the pending result
+ */
+fn submitTask(executor: ExecutorService, task: Callable) -> Future = {
+    executor.submit(task)
+}
+

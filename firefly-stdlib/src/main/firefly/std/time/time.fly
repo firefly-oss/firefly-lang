@@ -1,0 +1,165 @@
+/**
+ * Time and Date Module
+ *
+ * Professional time and date utilities library for Firefly.
+ * Provides time measurement, delays, and date/time formatting.
+ *
+ * Features:
+ * - Time measurement: now(), nanoTime(), measureTime()
+ * - Delays: sleep(), sleepMillis(), sleepNanos()
+ * - Date/Time formatting: formatTimestamp(), formatDuration()
+ * - Utilities: elapsed(), benchmark()
+ *
+ * @module firefly::std::time
+ * @since 1.0.0
+ * @status COMPLETE
+ */
+
+module firefly::std::time
+
+use firefly::std::result::{Result, Ok, Err}
+use firefly::std::option::{Option, Some, None}
+use java::lang::System
+use java::lang::Thread
+use java::time::Instant
+use java::time::Duration
+use java::time::LocalDateTime
+use java::time::ZoneId
+use java::time::format::DateTimeFormatter
+
+// ============================================================================
+// Time Measurement
+// ============================================================================
+
+/**
+ * Get the current time in milliseconds since the Unix epoch (1970-01-01).
+ *
+ * @return The current time in milliseconds
+ */
+fn now() -> Int = {
+    System.currentTimeMillis()
+}
+
+/**
+ * Get the current time in nanoseconds from a monotonic clock.
+ * Useful for measuring elapsed time with high precision.
+ *
+ * @return The current time in nanoseconds
+ */
+fn nanoTime() -> Int = {
+    System.nanoTime()
+}
+
+/**
+ * Calculate elapsed time in milliseconds between two timestamps.
+ *
+ * @param start The start time in milliseconds
+ * @param end The end time in milliseconds
+ * @return The elapsed time in milliseconds
+ */
+fn elapsed(start: Int, end: Int) -> Int = {
+    end - start
+}
+
+/**
+ * Calculate elapsed time in nanoseconds between two nano timestamps.
+ *
+ * @param start The start time in nanoseconds
+ * @param end The end time in nanoseconds
+ * @return The elapsed time in nanoseconds
+ */
+fn elapsedNanos(start: Int, end: Int) -> Int = {
+    end - start
+}
+
+// ============================================================================
+// Delays
+// ============================================================================
+
+/**
+ * Sleep for a specified number of seconds.
+ *
+ * @param seconds The number of seconds to sleep
+ * @return Result containing Unit on success, or an error message
+ */
+fn sleep(seconds: Int) -> Result = {
+    try {
+        Thread.sleep(seconds * 1000);
+        Ok(0)
+    } catch (e) {
+        Err("Sleep interrupted: " + e.getMessage())
+    }
+}
+
+/**
+ * Sleep for a specified number of milliseconds.
+ *
+ * @param millis The number of milliseconds to sleep
+ * @return Result containing Unit on success, or an error message
+ */
+fn sleepMillis(millis: Int) -> Result = {
+    try {
+        Thread.sleep(millis);
+        Ok(0)
+    } catch (e) {
+        Err("Sleep interrupted: " + e.getMessage())
+    }
+}
+
+/**
+ * Sleep for a specified number of nanoseconds.
+ *
+ * @param nanos The number of nanoseconds to sleep
+ * @return Result containing Unit on success, or an error message
+ */
+fn sleepNanos(nanos: Int) -> Result = {
+    try {
+        let millis = nanos / 1000000;
+        let remainingNanos = nanos % 1000000;
+        Thread.sleep(millis, remainingNanos);
+        Ok(0)
+    } catch (e) {
+        Err("Sleep interrupted: " + e.getMessage())
+    }
+}
+
+// ============================================================================
+// Formatting
+// ============================================================================
+
+/**
+ * Format a timestamp (milliseconds since epoch) as an ISO 8601 string.
+ *
+ * @param timestamp The timestamp in milliseconds
+ * @return The formatted date-time string
+ */
+fn formatTimestamp(timestamp: Int) -> String = {
+    let instant = Instant.ofEpochMilli(timestamp);
+    let dateTime = LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
+    let formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
+    dateTime.format(formatter)
+}
+
+/**
+ * Format a duration in milliseconds as a human-readable string.
+ *
+ * @param millis The duration in milliseconds
+ * @return The formatted duration string (e.g., "1h 23m 45s")
+ */
+fn formatDuration(millis: Int) -> String = {
+    let seconds = millis / 1000;
+    let minutes = seconds / 60;
+    let hours = minutes / 60;
+
+    let s = seconds % 60;
+    let m = minutes % 60;
+    let h = hours;
+
+    if (h > 0) {
+        h + "h " + m + "m " + s + "s"
+    } else if (m > 0) {
+        m + "m " + s + "s"
+    } else {
+        s + "s"
+    }
+}

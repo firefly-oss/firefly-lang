@@ -1,0 +1,313 @@
+/**
+ * Firefly Standard Library - Networking Module
+ * 
+ * Provides networking operations including HTTP clients, servers, and utilities.
+ * 
+ * @module firefly::std::net
+ * @version 0.1.0
+ */
+
+module firefly::std::net
+
+use firefly::std::result::{Result, Ok, Err}
+use firefly::std::option::{Option, Some, None}
+use java::net::URL
+use java::net::HttpURLConnection
+use java::net::URLConnection
+use java::net::InetAddress
+use java::net::Socket
+use java::net::ServerSocket
+use java::io::BufferedReader
+use java::io::InputStreamReader
+use java::io::OutputStream
+use java::io::IOException
+use java::nio::charset::StandardCharsets
+
+// ============================================================================
+// HTTP Client Operations
+// ============================================================================
+
+/**
+ * Performs an HTTP GET request to the specified URL.
+ * 
+ * @param url The URL to request
+ * @return Result containing the response body as a String, or an error message
+ * 
+ * @example
+ *   let response = net.get("https://api.example.com/data");
+ *   match response {
+ *     Ok(body) => println("Response: " + body),
+ *     Err(e) => println("Error: " + e)
+ *   }
+ */
+fn get(url: String) -> Result = {
+    try {
+        let urlObj = new URL(url);
+        let conn = urlObj.openConnection();
+        let httpConn = conn;
+        
+        httpConn.setRequestMethod("GET");
+        httpConn.setConnectTimeout(5000);
+        httpConn.setReadTimeout(5000);
+        
+        let responseCode = httpConn.getResponseCode();
+        
+        if (responseCode == 200) {
+            let reader = new BufferedReader(new InputStreamReader(httpConn.getInputStream(), StandardCharsets.UTF_8));
+            let response = new java::lang::StringBuilder();
+            let line = reader.readLine();
+            
+            while (line != none) {
+                response.append(line);
+                response.append("\n");
+                line = reader.readLine();
+            }
+            
+            reader.close();
+            Ok(response.toString())
+        } else {
+            Err("HTTP error: " + responseCode)
+        }
+    } catch (e) {
+        Err("Failed to perform GET request: " + e.getMessage())
+    }
+}
+
+/**
+ * Performs an HTTP POST request to the specified URL with the given body.
+ * 
+ * @param url The URL to request
+ * @param body The request body
+ * @return Result containing the response body as a String, or an error message
+ * 
+ * @example
+ *   let response = net.post("https://api.example.com/data", "{\"key\":\"value\"}");
+ */
+fn post(url: String, body: String) -> Result = {
+    try {
+        let urlObj = new URL(url);
+        let conn = urlObj.openConnection();
+        let httpConn = conn;
+        
+        httpConn.setRequestMethod("POST");
+        httpConn.setDoOutput(true);
+        httpConn.setConnectTimeout(5000);
+        httpConn.setReadTimeout(5000);
+        httpConn.setRequestProperty("Content-Type", "application/json");
+        
+        let os = httpConn.getOutputStream();
+        let input = body.getBytes(StandardCharsets.UTF_8);
+        os.write(input, 0, input.length);
+        os.close();
+        
+        let responseCode = httpConn.getResponseCode();
+        
+        if (responseCode == 200 || responseCode == 201) {
+            let reader = new BufferedReader(new InputStreamReader(httpConn.getInputStream(), StandardCharsets.UTF_8));
+            let response = new java::lang::StringBuilder();
+            let line = reader.readLine();
+            
+            while (line != none) {
+                response.append(line);
+                response.append("\n");
+                line = reader.readLine();
+            }
+            
+            reader.close();
+            Ok(response.toString())
+        } else {
+            Err("HTTP error: " + responseCode)
+        }
+    } catch (e) {
+        Err("Failed to perform POST request: " + e.getMessage())
+    }
+}
+
+/**
+ * Downloads content from a URL and returns it as bytes.
+ * 
+ * @param url The URL to download from
+ * @return Result containing the downloaded bytes, or an error message
+ */
+fn download(url: String) -> Result = {
+    try {
+        let urlObj = new URL(url);
+        let conn = urlObj.openConnection();
+        let inputStream = conn.getInputStream();
+        let bytes = inputStream.readAllBytes();
+        inputStream.close();
+        Ok(bytes)
+    } catch (e) {
+        Err("Failed to download from URL: " + e.getMessage())
+    }
+}
+
+// ============================================================================
+// Network Utilities
+// ============================================================================
+
+/**
+ * Resolves a hostname to an IP address.
+ * 
+ * @param hostname The hostname to resolve
+ * @return Result containing the IP address as a String, or an error message
+ * 
+ * @example
+ *   let ip = net.resolve("google.com");
+ */
+fn resolve(hostname: String) -> Result = {
+    try {
+        let addr = InetAddress.getByName(hostname);
+        Ok(addr.getHostAddress())
+    } catch (e) {
+        Err("Failed to resolve hostname: " + e.getMessage())
+    }
+}
+
+/**
+ * Gets the local hostname.
+ * 
+ * @return Result containing the local hostname, or an error message
+ */
+fn getLocalHostname() -> Result = {
+    try {
+        let addr = InetAddress.getLocalHost();
+        Ok(addr.getHostName())
+    } catch (e) {
+        Err("Failed to get local hostname: " + e.getMessage())
+    }
+}
+
+/**
+ * Gets the local IP address.
+ * 
+ * @return Result containing the local IP address, or an error message
+ */
+fn getLocalIP() -> Result = {
+    try {
+        let addr = InetAddress.getLocalHost();
+        Ok(addr.getHostAddress())
+    } catch (e) {
+        Err("Failed to get local IP: " + e.getMessage())
+    }
+}
+
+/**
+ * Checks if a host is reachable on a specific port.
+ * 
+ * @param host The hostname or IP address
+ * @param port The port number
+ * @param timeoutMs Timeout in milliseconds
+ * @return true if the host is reachable, false otherwise
+ * 
+ * @example
+ *   let reachable = net.isReachable("google.com", 80, 3000);
+ */
+fn isReachable(host: String, port: Int, timeoutMs: Int) -> Bool = {
+    try {
+        let socket = new Socket();
+        let addr = InetAddress.getByName(host);
+        let socketAddr = new java::net::InetSocketAddress(addr, port);
+        socket.connect(socketAddr, timeoutMs);
+        socket.close();
+        true
+    } catch (e) {
+        false
+    }
+}
+
+// ============================================================================
+// URL Utilities
+// ============================================================================
+
+/**
+ * Encodes a string for use in a URL.
+ * 
+ * @param str The string to encode
+ * @return The URL-encoded string
+ * 
+ * @example
+ *   let encoded = net.urlEncode("hello world"); // "hello+world"
+ */
+fn urlEncode(str: String) -> String = {
+    java::net::URLEncoder.encode(str, StandardCharsets.UTF_8)
+}
+
+/**
+ * Decodes a URL-encoded string.
+ * 
+ * @param str The URL-encoded string
+ * @return The decoded string
+ * 
+ * @example
+ *   let decoded = net.urlDecode("hello+world"); // "hello world"
+ */
+fn urlDecode(str: String) -> String = {
+    java::net::URLDecoder.decode(str, StandardCharsets.UTF_8)
+}
+
+/**
+ * Parses a URL and extracts its components.
+ * 
+ * @param url The URL string to parse
+ * @return Result containing the URL object, or an error message
+ */
+fn parseURL(url: String) -> Result = {
+    try {
+        let urlObj = new URL(url);
+        Ok(urlObj)
+    } catch (e) {
+        Err("Failed to parse URL: " + e.getMessage())
+    }
+}
+
+/**
+ * Gets the protocol from a URL.
+ * 
+ * @param url The URL string
+ * @return Result containing the protocol (e.g., "http", "https"), or an error
+ */
+fn getProtocol(url: String) -> Result = {
+    try {
+        let urlObj = new URL(url);
+        Ok(urlObj.getProtocol())
+    } catch (e) {
+        Err("Failed to get protocol: " + e.getMessage())
+    }
+}
+
+/**
+ * Gets the host from a URL.
+ * 
+ * @param url The URL string
+ * @return Result containing the host, or an error
+ */
+fn getHost(url: String) -> Result = {
+    try {
+        let urlObj = new URL(url);
+        Ok(urlObj.getHost())
+    } catch (e) {
+        Err("Failed to get host: " + e.getMessage())
+    }
+}
+
+/**
+ * Gets the port from a URL.
+ * 
+ * @param url The URL string
+ * @return Result containing the port number, or an error
+ */
+fn getPort(url: String) -> Result = {
+    try {
+        let urlObj = new URL(url);
+        let port = urlObj.getPort();
+        if (port == -1) {
+            Ok(urlObj.getDefaultPort())
+        } else {
+            Ok(port)
+        }
+    } catch (e) {
+        Err("Failed to get port: " + e.getMessage())
+    }
+}
+

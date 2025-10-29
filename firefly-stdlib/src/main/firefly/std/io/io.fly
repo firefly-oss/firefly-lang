@@ -1,0 +1,238 @@
+/**
+ * I/O Utilities Module
+ *
+ * Professional input/output operations library for Firefly.
+ * Provides console I/O, file I/O, and formatting utilities.
+ *
+ * Features:
+ * - Console output: print(), println(), eprint(), eprintln()
+ * - Console input: readLine(), readInt(), readFloat(), readBool()
+ * - Formatted output: printf(), format()
+ * - File I/O: readFile(), writeFile(), appendFile()
+ * - Buffered I/O for performance
+ *
+ * @module firefly::std::io
+ * @since 1.0.0
+ * @status COMPLETE
+ */
+
+module firefly::std::io
+
+use firefly::std::result::{Result, Ok, Err}
+use firefly::std::option::{Option, Some, None}
+use java::lang::System
+use java::io::PrintStream
+use java::io::BufferedReader
+use java::io::InputStreamReader
+use java::io::FileReader
+use java::io::FileWriter
+use java::io::BufferedWriter
+use java::nio::file::Files
+use java::nio::file::Paths
+use java::nio::charset::StandardCharsets
+
+// ============================================================================
+// Console Output
+// ============================================================================
+
+/**
+ * Print a string to stdout without a newline.
+ *
+ * @param s The string to print
+ */
+fn print(s: String) -> Void = {
+    let out: PrintStream = System.out;
+    out::print(s);
+}
+
+/**
+ * Print a string to stdout with a newline.
+ *
+ * @param s The string to print
+ */
+fn println(s: String) -> Void = {
+    let out: PrintStream = System.out;
+    out::println(s);
+}
+
+/**
+ * Print an empty line to stdout.
+ */
+fn println() -> Void = {
+    let out: PrintStream = System.out;
+    out::println();
+}
+
+/**
+ * Print a string to stderr without a newline.
+ *
+ * @param s The string to print
+ */
+fn eprint(s: String) -> Void = {
+    let err: PrintStream = System.err;
+    err::print(s);
+}
+
+/**
+ * Print a string to stderr with a newline.
+ *
+ * @param s The string to print
+ */
+fn eprintln(s: String) -> Void = {
+    let err: PrintStream = System.err;
+    err::println(s);
+}
+
+/**
+ * Print an empty line to stderr.
+ */
+fn eprintln() -> Void = {
+    let err: PrintStream = System.err;
+    err::println();
+}
+
+/**
+ * Print a formatted string to stdout using Java's String.format.
+ *
+ * @param format The format string
+ * @param args The arguments to format
+ */
+fn printf(format: String, args: Object...) -> Void = {
+    let formatted: String = String::format(format, args);
+    let out: PrintStream = System.out;
+    out::print(formatted);
+}
+
+/**
+ * Format a string using Java's String.format.
+ *
+ * @param format The format string
+ * @param args The arguments to format
+ * @return The formatted string
+ */
+fn format(format: String, args: Object...) -> String = {
+    String::format(format, args)
+}
+
+// ============================================================================
+// Console Input
+// ============================================================================
+
+/**
+ * Read a line from stdin.
+ *
+ * @return Result containing the line read, or an error message
+ */
+fn readLine() -> Result = {
+    try {
+        let reader = new BufferedReader(new InputStreamReader(System.in));
+        let line = reader.readLine();
+        Ok(line)
+    } catch (e) {
+        Err("Failed to read line: " + e.getMessage())
+    }
+}
+
+/**
+ * Read an integer from stdin.
+ *
+ * @return Result containing the integer read, or an error message
+ */
+fn readInt() -> Result = {
+    try {
+        let reader = new BufferedReader(new InputStreamReader(System.in));
+        let line = reader.readLine();
+        let value = Integer.parseInt(line);
+        Ok(value)
+    } catch (e) {
+        Err("Failed to read integer: " + e.getMessage())
+    }
+}
+
+/**
+ * Read a float from stdin.
+ *
+ * @return Result containing the float read, or an error message
+ */
+fn readFloat() -> Result = {
+    try {
+        let reader = new BufferedReader(new InputStreamReader(System.in));
+        let line = reader.readLine();
+        let value = Float.parseFloat(line);
+        Ok(value)
+    } catch (e) {
+        Err("Failed to read float: " + e.getMessage())
+    }
+}
+
+/**
+ * Read a boolean from stdin (accepts "true"/"false", case-insensitive).
+ *
+ * @return Result containing the boolean read, or an error message
+ */
+fn readBool() -> Result = {
+    try {
+        let reader = new BufferedReader(new InputStreamReader(System.in));
+        let line = reader.readLine();
+        let value = Boolean.parseBoolean(line);
+        Ok(value)
+    } catch (e) {
+        Err("Failed to read boolean: " + e.getMessage())
+    }
+}
+
+// ============================================================================
+// File I/O
+// ============================================================================
+
+/**
+ * Read the entire contents of a file as a string.
+ *
+ * @param path The path to the file
+ * @return Result containing the file contents, or an error message
+ */
+fn readFile(path: String) -> Result = {
+    try {
+        let bytes = Files.readAllBytes(Paths.get(path));
+        let content = new String(bytes, StandardCharsets.UTF_8);
+        Ok(content)
+    } catch (e) {
+        Err("Failed to read file '" + path + "': " + e.getMessage())
+    }
+}
+
+/**
+ * Write a string to a file, overwriting if it exists.
+ *
+ * @param path The path to the file
+ * @param content The content to write
+ * @return Result containing Unit on success, or an error message
+ */
+fn writeFile(path: String, content: String) -> Result = {
+    try {
+        let writer = new BufferedWriter(new FileWriter(path));
+        writer.write(content);
+        writer.close();
+        Ok(0)
+    } catch (e) {
+        Err("Failed to write file '" + path + "': " + e.getMessage())
+    }
+}
+
+/**
+ * Append a string to a file, creating it if it doesn't exist.
+ *
+ * @param path The path to the file
+ * @param content The content to append
+ * @return Result containing Unit on success, or an error message
+ */
+fn appendFile(path: String, content: String) -> Result = {
+    try {
+        let writer = new BufferedWriter(new FileWriter(path, true));
+        writer.write(content);
+        writer.close();
+        Ok(0)
+    } catch (e) {
+        Err("Failed to append to file '" + path + "': " + e.getMessage())
+    }
+}

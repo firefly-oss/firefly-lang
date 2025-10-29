@@ -1,0 +1,330 @@
+/**
+ * String Utilities Module
+ *
+ * Professional string manipulation library for Firefly.
+ * Provides functional operations for working with strings.
+ *
+ * All functions are pure and immutable - they return new strings
+ * rather than modifying the input.
+ *
+ * IMPLEMENTATION STATUS:
+ * ----------------------
+ * Current capabilities:
+ * - String concatenation with + operator
+ * - String comparison with == and != operators
+ * - Type conversion to string
+ * - Basic string building operations
+ *
+ * Awaiting compiler features:
+ * - Method call syntax: `str.length()`, `str.trim()`, etc.
+ * - String indexing: `str[0]`
+ * - String slicing: `str[1..5]`
+ * - Character type support
+ * - Regular expressions
+ * - Array/List support for split operations
+ *
+ * @module firefly::std::string
+ * @since 1.0.0
+ */
+
+module firefly::std::string
+
+use firefly::std::option::{Option, Some, None}
+
+// ============================================================================
+// String Concatenation
+// ============================================================================
+
+/**
+ * Concatenates two strings.
+ *
+ * @param a The first string
+ * @param b The second string
+ * @return The concatenated string
+ *
+ * @example
+ *   concat("Hello", " World") // "Hello World"
+ */
+fn concat(a: String, b: String) -> String = a + b
+
+/**
+ * Concatenates three strings.
+ *
+ * @param a The first string
+ * @param b The second string
+ * @param c The third string
+ * @return The concatenated string
+ *
+ * @example
+ *   concat3("Hello", " ", "World") // "Hello World"
+ */
+fn concat3(a: String, b: String, c: String) -> String = a + b + c
+
+/**
+ * Concatenates four strings.
+ *
+ * @param a The first string
+ * @param b The second string
+ * @param c The third string
+ * @param d The fourth string
+ * @return The concatenated string
+ *
+ * @example
+ *   concat4("Hello", " ", "World", "!") // "Hello World!"
+ */
+fn concat4(a: String, b: String, c: String, d: String) -> String = a + b + c + d
+
+/**
+ * Concatenates five strings.
+ *
+ * @param a The first string
+ * @param b The second string
+ * @param c The third string
+ * @param d The fourth string
+ * @param e The fifth string
+ * @return The concatenated string
+ *
+ * @example
+ *   concat5("a", "b", "c", "d", "e") // "abcde"
+ */
+fn concat5(a: String, b: String, c: String, d: String, e: String) -> String =
+    a + b + c + d + e
+
+// ============================================================================
+// String Comparison
+// ============================================================================
+
+/**
+ * Compares two strings for equality.
+ *
+ * @param a The first string
+ * @param b The second string
+ * @return 1 if equal, 0 if not equal
+ *
+ * @example
+ *   equals("hello", "hello") // 1
+ *   equals("hello", "world") // 0
+ */
+fn equals(a: String, b: String) -> Int = if a == b { 1 } else { 0 }
+
+/**
+ * Compares two strings for inequality.
+ *
+ * @param a The first string
+ * @param b The second string
+ * @return 1 if not equal, 0 if equal
+ *
+ * @example
+ *   notEquals("hello", "world") // 1
+ *   notEquals("hello", "hello") // 0
+ */
+fn notEquals(a: String, b: String) -> Int = if a != b { 1 } else { 0 }
+
+// ============================================================================
+// Type Conversion
+// ============================================================================
+
+/**
+ * Creates a string representation of an integer.
+ *
+ * @param n The integer to convert
+ * @return The string representation
+ *
+ * @example
+ *   fromInt(42) // "42"
+ *   fromInt(-10) // "-10"
+ */
+fn fromInt(n: Int) -> String = "" + n
+
+/**
+ * Creates a string representation of a boolean (as 0 or 1).
+ *
+ * @param b The boolean (0 for false, non-zero for true)
+ * @return The string representation
+ *
+ * @example
+ *   fromBool(1) // "1"
+ *   fromBool(0) // "0"
+ */
+fn fromBool(b: Int) -> String = "" + b
+
+
+// ============================================================================
+// String Building
+// ============================================================================
+
+/**
+ * Repeats a string n times.
+ *
+ * @param str The string to repeat
+ * @param n The number of times to repeat
+ * @return The repeated string
+ *
+ * @example
+ *   repeat("ab", 3) // "ababab"
+ *   repeat("x", 5) // "xxxxx"
+ */
+fn repeat(str: String, n: Int) -> String = {
+    if n <= 0 {
+        ""
+    } else {
+        if n == 1 {
+            str
+        } else {
+            let mut result = "";
+            let mut i = 0;
+            while i < n {
+                result = result + str;
+                i = i + 1
+            };
+            result
+        }
+    }
+}
+
+/**
+ * Creates a string of spaces.
+ *
+ * @param n The number of spaces
+ * @return A string containing n spaces
+ *
+ * @example
+ *   spaces(5) // "     "
+ */
+fn spaces(n: Int) -> String = repeat(" ", n)
+
+/**
+ * Pads a string on the left with spaces to reach a minimum length.
+ *
+ * Note: This is a simplified version. Full implementation requires
+ * string length method.
+ *
+ * @param str The string to pad
+ * @param totalWidth The desired total width
+ * @return The padded string
+ *
+ * @example
+ *   padLeft("42", 5) // "   42" (conceptually)
+ */
+fn padLeft(str: String, padding: String) -> String = padding + str
+
+/**
+ * Pads a string on the right with spaces.
+ *
+ * @param str The string to pad
+ * @param padding The padding to add
+ * @return The padded string
+ *
+ * @example
+ *   padRight("42", "   ") // "42   "
+ */
+fn padRight(str: String, padding: String) -> String = str + padding
+
+// ============================================================================
+// String Utilities
+// ============================================================================
+
+/**
+ * Wraps a string in double quotes.
+ *
+ * @param str The string to quote
+ * @return The quoted string
+ *
+ * @example
+ *   quote("hello") // "\"hello\""
+ */
+fn quote(str: String) -> String = "\"" + str + "\""
+
+/**
+ * Wraps a string in single quotes.
+ *
+ * @param str The string to quote
+ * @return The quoted string
+ *
+ * @example
+ *   singleQuote("hello") // "'hello'"
+ */
+fn singleQuote(str: String) -> String = "'" + str + "'"
+
+/**
+ * Wraps a string in parentheses.
+ *
+ * @param str The string to wrap
+ * @return The wrapped string
+ *
+ * @example
+ *   parens("hello") // "(hello)"
+ */
+fn parens(str: String) -> String = "(" + str + ")"
+
+/**
+ * Wraps a string in square brackets.
+ *
+ * @param str The string to wrap
+ * @return The wrapped string
+ *
+ * @example
+ *   brackets("hello") // "[hello]"
+ */
+fn brackets(str: String) -> String = "[" + str + "]"
+
+/**
+ * Wraps a string in curly braces.
+ *
+ * @param str The string to wrap
+ * @return The wrapped string
+ *
+ * @example
+ *   braces("hello") // "{hello}"
+ */
+fn braces(str: String) -> String = "{" + str + "}"
+
+/**
+ * Creates a comma-separated pair.
+ *
+ * @param a The first string
+ * @param b The second string
+ * @return The comma-separated pair
+ *
+ * @example
+ *   commaSep("a", "b") // "a, b"
+ */
+fn commaSep(a: String, b: String) -> String = a + ", " + b
+
+/**
+ * Creates a comma-separated triple.
+ *
+ * @param a The first string
+ * @param b The second string
+ * @param c The third string
+ * @return The comma-separated triple
+ *
+ * @example
+ *   commaSep3("a", "b", "c") // "a, b, c"
+ */
+fn commaSep3(a: String, b: String, c: String) -> String = a + ", " + b + ", " + c
+
+/**
+ * Creates a newline-separated pair.
+ *
+ * @param a The first string
+ * @param b The second string
+ * @return The newline-separated pair
+ *
+ * @example
+ *   lines("line1", "line2") // "line1\nline2"
+ */
+fn lines(a: String, b: String) -> String = a + "\n" + b
+
+/**
+ * Creates a newline-separated triple.
+ *
+ * @param a The first string
+ * @param b The second string
+ * @param c The third string
+ * @return The newline-separated triple
+ *
+ * @example
+ *   lines3("line1", "line2", "line3") // "line1\nline2\nline3"
+ */
+fn lines3(a: String, b: String, c: String) -> String = a + "\n" + b + "\n" + c

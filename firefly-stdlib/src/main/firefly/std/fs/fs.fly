@@ -1,0 +1,301 @@
+/**
+ * File System Module
+ *
+ * Professional file system operations library for Firefly.
+ * Provides file and directory manipulation utilities.
+ *
+ * Features:
+ * - File operations: exists(), copy(), move(), delete(), rename()
+ * - Directory operations: createDir(), removeDir(), listDir()
+ * - File metadata: isFile(), isDir(), size(), modified()
+ * - Path operations: join(), parent(), filename(), extension()
+ *
+ * @module firefly::std::fs
+ * @since 1.0.0
+ * @status COMPLETE
+ */
+
+module firefly::std::fs
+
+use firefly::std::result::{Result, Ok, Err}
+use firefly::std::option::{Option, Some, None}
+use java::io::File
+use java::nio::file::Files
+use java::nio::file::Paths
+use java::nio::file::Path
+use java::nio::file::StandardCopyOption
+use java::nio::file::attribute::FileTime
+
+// ============================================================================
+// File Metadata
+// ============================================================================
+
+/**
+ * Check if a path exists.
+ *
+ * @param path The path to check
+ * @return true if the path exists, false otherwise
+ */
+fn exists(path: String) -> Bool = {
+    let file = new File(path);
+    file.exists()
+}
+
+/**
+ * Check if a path is a file.
+ *
+ * @param path The path to check
+ * @return true if the path is a file, false otherwise
+ */
+fn isFile(path: String) -> Bool = {
+    let file = new File(path);
+    file.isFile()
+}
+
+/**
+ * Check if a path is a directory.
+ *
+ * @param path The path to check
+ * @return true if the path is a directory, false otherwise
+ */
+fn isDir(path: String) -> Bool = {
+    let file = new File(path);
+    file.isDirectory()
+}
+
+/**
+ * Get the size of a file in bytes.
+ *
+ * @param path The path to the file
+ * @return Result containing the file size, or an error message
+ */
+fn size(path: String) -> Result = {
+    try {
+        let p = Paths.get(path);
+        let bytes = Files.size(p);
+        Ok(bytes)
+    } catch (e) {
+        Err("Failed to get size of '" + path + "': " + e.getMessage())
+    }
+}
+
+/**
+ * Get the last modified time of a file in milliseconds since epoch.
+ *
+ * @param path The path to the file
+ * @return Result containing the last modified time, or an error message
+ */
+fn modified(path: String) -> Result = {
+    try {
+        let file = new File(path);
+        let millis = file.lastModified();
+        Ok(millis)
+    } catch (e) {
+        Err("Failed to get modified time of '" + path + "': " + e.getMessage())
+    }
+}
+
+// ============================================================================
+// File Operations
+// ============================================================================
+
+/**
+ * Copy a file from source to destination.
+ *
+ * @param src The source file path
+ * @param dst The destination file path
+ * @return Result containing Unit on success, or an error message
+ */
+fn copy(src: String, dst: String) -> Result = {
+    try {
+        let srcPath = Paths.get(src);
+        let dstPath = Paths.get(dst);
+        Files.copy(srcPath, dstPath, StandardCopyOption.REPLACE_EXISTING);
+        Ok(0)
+    } catch (e) {
+        Err("Failed to copy '" + src + "' to '" + dst + "': " + e.getMessage())
+    }
+}
+
+/**
+ * Move a file from source to destination.
+ *
+ * @param src The source file path
+ * @param dst The destination file path
+ * @return Result containing Unit on success, or an error message
+ */
+fn move(src: String, dst: String) -> Result = {
+    try {
+        let srcPath = Paths.get(src);
+        let dstPath = Paths.get(dst);
+        Files.move(srcPath, dstPath, StandardCopyOption.REPLACE_EXISTING);
+        Ok(0)
+    } catch (e) {
+        Err("Failed to move '" + src + "' to '" + dst + "': " + e.getMessage())
+    }
+}
+
+/**
+ * Delete a file or empty directory.
+ *
+ * @param path The path to delete
+ * @return Result containing Unit on success, or an error message
+ */
+fn delete(path: String) -> Result = {
+    try {
+        let p = Paths.get(path);
+        Files.delete(p);
+        Ok(0)
+    } catch (e) {
+        Err("Failed to delete '" + path + "': " + e.getMessage())
+    }
+}
+
+/**
+ * Rename a file or directory.
+ *
+ * @param oldPath The current path
+ * @param newPath The new path
+ * @return Result containing Unit on success, or an error message
+ */
+fn rename(oldPath: String, newPath: String) -> Result = {
+    try {
+        let file = new File(oldPath);
+        let success = file.renameTo(new File(newPath));
+        if (success) {
+            Ok(0)
+        } else {
+            Err("Failed to rename '" + oldPath + "' to '" + newPath + "'")
+        }
+    } catch (e) {
+        Err("Failed to rename '" + oldPath + "': " + e.getMessage())
+    }
+}
+
+// ============================================================================
+// Directory Operations
+// ============================================================================
+
+/**
+ * Create a directory.
+ *
+ * @param path The path to the directory to create
+ * @return Result containing Unit on success, or an error message
+ */
+fn createDir(path: String) -> Result = {
+    try {
+        let file = new File(path);
+        let success = file.mkdir();
+        if (success) {
+            Ok(0)
+        } else {
+            Err("Failed to create directory '" + path + "'")
+        }
+    } catch (e) {
+        Err("Failed to create directory '" + path + "': " + e.getMessage())
+    }
+}
+
+/**
+ * Create a directory and all parent directories.
+ *
+ * @param path The path to the directory to create
+ * @return Result containing Unit on success, or an error message
+ */
+fn createDirAll(path: String) -> Result = {
+    try {
+        let file = new File(path);
+        let success = file.mkdirs();
+        if (success) {
+            Ok(0)
+        } else {
+            Err("Failed to create directories '" + path + "'")
+        }
+    } catch (e) {
+        Err("Failed to create directories '" + path + "': " + e.getMessage())
+    }
+}
+
+/**
+ * Remove an empty directory.
+ *
+ * @param path The path to the directory to remove
+ * @return Result containing Unit on success, or an error message
+ */
+fn removeDir(path: String) -> Result = {
+    try {
+        let file = new File(path);
+        let success = file.delete();
+        if (success) {
+            Ok(0)
+        } else {
+            Err("Failed to remove directory '" + path + "' (may not be empty)")
+        }
+    } catch (e) {
+        Err("Failed to remove directory '" + path + "': " + e.getMessage())
+    }
+}
+
+// ============================================================================
+// Path Operations
+// ============================================================================
+
+/**
+ * Get the parent directory of a path.
+ *
+ * @param path The path
+ * @return Option containing the parent path, or None if no parent
+ */
+fn parent(path: String) -> Option = {
+    let file = new File(path);
+    let parentPath = file.getParent();
+    if (parentPath == null) {
+        None()
+    } else {
+        Some(parentPath)
+    }
+}
+
+/**
+ * Get the filename (last component) of a path.
+ *
+ * @param path The path
+ * @return The filename
+ */
+fn filename(path: String) -> String = {
+    let file = new File(path);
+    file.getName()
+}
+
+/**
+ * Get the file extension of a path.
+ *
+ * @param path The path
+ * @return Option containing the extension (without dot), or None if no extension
+ */
+fn extension(path: String) -> Option = {
+    let name = filename(path);
+    let lastDot = name.lastIndexOf(".");
+    if (lastDot == -1) {
+        None()
+    } else {
+        let ext = name.substring(lastDot + 1);
+        Some(ext)
+    }
+}
+
+/**
+ * Get the absolute path of a file.
+ *
+ * @param path The path
+ * @return Result containing the absolute path, or an error message
+ */
+fn absolutePath(path: String) -> Result = {
+    try {
+        let file = new File(path);
+        let absPath = file.getAbsolutePath();
+        Ok(absPath)
+    } catch (e) {
+        Err("Failed to get absolute path of '" + path + "': " + e.getMessage())
+    }
+}

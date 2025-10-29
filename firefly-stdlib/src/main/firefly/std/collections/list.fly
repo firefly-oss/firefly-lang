@@ -1,0 +1,472 @@
+/**
+ * List Collection Module
+ *
+ * Professional list operations library for Firefly.
+ * Provides functional operations on lists backed by java.util.ArrayList.
+ *
+ * This implementation uses Java's ArrayList for efficient random access
+ * and provides a functional API with lambdas for transformations.
+ *
+ * @module firefly::std::collections::list
+ * @since 1.0.0
+ * @status COMPLETE
+ */
+
+module firefly::std::collections::list
+
+use firefly::std::option::{Option, Some, None}
+use java::util::ArrayList
+
+// ============================================================================
+// Type Alias
+// ============================================================================
+
+/**
+ * List<T> is backed by java.util.ArrayList<T>
+ * This provides O(1) random access and O(1) amortized append.
+ */
+
+// ============================================================================
+// Constructors
+// ============================================================================
+
+/**
+ * Creates an empty list.
+ *
+ * @return A new empty list
+ *
+ * @example
+ *   let list = empty()
+ */
+fn empty<T>() -> ArrayList = new ArrayList()
+
+/**
+ * Creates a list with a single element.
+ *
+ * @param value The element to add
+ * @return A new list containing the element
+ *
+ * @example
+ *   let list = singleton(42)  // [42]
+ */
+fn singleton<T>(value: T) -> ArrayList = {
+    let list = new ArrayList();
+    list.add(value);
+    list
+}
+
+/**
+ * Creates a list from varargs.
+ *
+ * @param elements Variable number of elements
+ * @return A new list containing all elements
+ *
+ * @example
+ *   let list = of(1, 2, 3, 4, 5)
+ */
+fn of<T>(elements: T...) -> ArrayList = {
+    let list = new ArrayList();
+    let i = 0;
+    while (i < elements.length) {
+        list.add(elements[i]);
+        i = i + 1;
+    };
+    list
+}
+
+// ============================================================================
+// Basic Operations
+// ============================================================================
+
+/**
+ * Returns the number of elements in the list.
+ *
+ * @param list The list to measure
+ * @return The number of elements
+ *
+ * @example
+ *   size(of(1, 2, 3))  // 3
+ */
+fn size<T>(list: ArrayList) -> Int = list.size()
+
+/**
+ * Returns true if the list is empty.
+ *
+ * @param list The list to check
+ * @return true if empty, false otherwise
+ *
+ * @example
+ *   isEmpty(empty())  // true
+ *   isEmpty(of(1))    // false
+ */
+fn isEmpty<T>(list: ArrayList) -> Bool = list.isEmpty()
+
+/**
+ * Gets the element at the specified index.
+ *
+ * @param list The list to access
+ * @param index The index (0-based)
+ * @return Some(element) if index is valid, None otherwise
+ *
+ * @example
+ *   get(of(1, 2, 3), 1)  // Some(2)
+ *   get(of(1, 2, 3), 5)  // None
+ */
+fn get<T>(list: ArrayList, index: Int) -> Option = {
+    if (index < 0 || index >= list.size()) {
+        None
+    } else {
+        Some(list.get(index))
+    }
+}
+
+/**
+ * Adds an element to the end of the list.
+ * Note: This mutates the list. For immutable operations, use functional methods.
+ *
+ * @param list The list to modify
+ * @param element The element to add
+ * @return The modified list
+ *
+ * @example
+ *   let list = empty();
+ *   add(list, 42);
+ *   add(list, 43);
+ */
+fn add<T>(list: ArrayList, element: T) -> ArrayList = {
+    list.add(element);
+    list
+}
+
+/**
+ * Checks if the list contains the specified element.
+ *
+ * @param list The list to search
+ * @param element The element to find
+ * @return true if found, false otherwise
+ *
+ * @example
+ *   contains(of(1, 2, 3), 2)  // true
+ *   contains(of(1, 2, 3), 5)  // false
+ */
+fn contains<T>(list: ArrayList, element: T) -> Bool = list.contains(element)
+
+// ============================================================================
+// Functional Operations
+// ============================================================================
+
+/**
+ * Applies a function to each element and returns a new list with the results.
+ *
+ * @param list The list to transform
+ * @param f The transformation function
+ * @return A new list with transformed elements
+ *
+ * @example
+ *   map(of(1, 2, 3), |x| x * 2)  // [2, 4, 6]
+ */
+fn map<T, U>(list: ArrayList, f: (T) -> U) -> ArrayList = {
+    let result = new ArrayList();
+    let i = 0;
+    while (i < list.size()) {
+        result.add(f(list.get(i)));
+        i = i + 1;
+    };
+    result
+}
+
+/**
+ * Filters elements that satisfy the predicate.
+ *
+ * @param list The list to filter
+ * @param predicate The filter function
+ * @return A new list with only matching elements
+ *
+ * @example
+ *   filter(of(1, 2, 3, 4), |x| x > 2)  // [3, 4]
+ */
+fn filter<T>(list: ArrayList, predicate: (T) -> Bool) -> ArrayList = {
+    let result = new ArrayList();
+    let i = 0;
+    while (i < list.size()) {
+        let elem = list.get(i);
+        if (predicate(elem)) {
+            result.add(elem);
+        };
+        i = i + 1;
+    };
+    result
+}
+
+/**
+ * Reduces the list to a single value using a binary function.
+ *
+ * @param list The list to reduce
+ * @param initial The initial accumulator value
+ * @param f The reduction function
+ * @return The final accumulated value
+ *
+ * @example
+ *   fold(of(1, 2, 3, 4), 0, |acc, x| acc + x)  // 10
+ */
+fn fold<T, A>(list: ArrayList, initial: A, f: (A, T) -> A) -> A = {
+    let acc = initial;
+    let i = 0;
+    while (i < list.size()) {
+        acc = f(acc, list.get(i));
+        i = i + 1;
+    };
+    acc
+}
+
+/**
+ * Executes a function for each element in the list.
+ *
+ * @param list The list to iterate
+ * @param f The function to execute
+ * @return Unit
+ *
+ * @example
+ *   forEach(of(1, 2, 3), |x| println(x))
+ */
+fn forEach<T>(list: ArrayList, f: (T) -> Void) -> Void = {
+    let i = 0;
+    while (i < list.size()) {
+        f(list.get(i));
+        i = i + 1;
+    }
+}
+
+/**
+ * Tests if all elements satisfy the predicate.
+ *
+ * @param list The list to test
+ * @param predicate The test function
+ * @return true if all elements match, false otherwise
+ *
+ * @example
+ *   all(of(2, 4, 6), |x| x % 2 == 0)  // true
+ *   all(of(1, 2, 3), |x| x % 2 == 0)  // false
+ */
+fn all<T>(list: ArrayList, predicate: (T) -> Bool) -> Bool = {
+    let i = 0;
+    while (i < list.size()) {
+        if (!predicate(list.get(i))) {
+            return false;
+        };
+        i = i + 1;
+    };
+    true
+}
+
+/**
+ * Tests if any element satisfies the predicate.
+ *
+ * @param list The list to test
+ * @param predicate The test function
+ * @return true if any element matches, false otherwise
+ *
+ * @example
+ *   any(of(1, 2, 3), |x| x > 2)  // true
+ *   any(of(1, 2, 3), |x| x > 5)  // false
+ */
+fn any<T>(list: ArrayList, predicate: (T) -> Bool) -> Bool = {
+    let i = 0;
+    while (i < list.size()) {
+        if (predicate(list.get(i))) {
+            return true;
+        };
+        i = i + 1;
+    };
+    false
+}
+
+/**
+ * Finds the first element that satisfies the predicate.
+ *
+ * @param list The list to search
+ * @param predicate The search function
+ * @return Some(element) if found, None otherwise
+ *
+ * @example
+ *   find(of(1, 2, 3, 4), |x| x > 2)  // Some(3)
+ *   find(of(1, 2, 3), |x| x > 5)     // None
+ */
+fn find<T>(list: ArrayList, predicate: (T) -> Bool) -> Option = {
+    let i = 0;
+    while (i < list.size()) {
+        let elem = list.get(i);
+        if (predicate(elem)) {
+            return Some(elem);
+        };
+        i = i + 1;
+    };
+    None
+}
+
+
+
+// ============================================================================
+// Utility Operations
+// ============================================================================
+
+/**
+ * Returns the first element of the list.
+ *
+ * @param list The list to access
+ * @return Some(first) if list is not empty, None otherwise
+ *
+ * @example
+ *   first(of(1, 2, 3))  // Some(1)
+ *   first(empty())      // None
+ */
+fn first<T>(list: ArrayList) -> Option = {
+    if (list.isEmpty()) {
+        None
+    } else {
+        Some(list.get(0))
+    }
+}
+
+/**
+ * Returns the last element of the list.
+ *
+ * @param list The list to access
+ * @return Some(last) if list is not empty, None otherwise
+ *
+ * @example
+ *   last(of(1, 2, 3))  // Some(3)
+ *   last(empty())      // None
+ */
+fn last<T>(list: ArrayList) -> Option = {
+    if (list.isEmpty()) {
+        None
+    } else {
+        Some(list.get(list.size() - 1))
+    }
+}
+
+/**
+ * Reverses the list.
+ * Note: This creates a new list with elements in reverse order.
+ *
+ * @param list The list to reverse
+ * @return A new reversed list
+ *
+ * @example
+ *   reverse(of(1, 2, 3))  // [3, 2, 1]
+ */
+fn reverse<T>(list: ArrayList) -> ArrayList = {
+    let result = new ArrayList();
+    let i = list.size() - 1;
+    while (i >= 0) {
+        result.add(list.get(i));
+        i = i - 1;
+    };
+    result
+}
+
+/**
+ * Takes the first n elements from the list.
+ *
+ * @param list The list to take from
+ * @param n The number of elements to take
+ * @return A new list with the first n elements
+ *
+ * @example
+ *   take(of(1, 2, 3, 4, 5), 3)  // [1, 2, 3]
+ */
+fn take<T>(list: ArrayList, n: Int) -> ArrayList = {
+    let result = new ArrayList();
+    let count = if (n < list.size()) { n } else { list.size() };
+    let i = 0;
+    while (i < count) {
+        result.add(list.get(i));
+        i = i + 1;
+    };
+    result
+}
+
+/**
+ * Drops the first n elements from the list.
+ *
+ * @param list The list to drop from
+ * @param n The number of elements to drop
+ * @return A new list without the first n elements
+ *
+ * @example
+ *   drop(of(1, 2, 3, 4, 5), 2)  // [3, 4, 5]
+ */
+fn drop<T>(list: ArrayList, n: Int) -> ArrayList = {
+    let result = new ArrayList();
+    let start = if (n < list.size()) { n } else { list.size() };
+    let i = start;
+    while (i < list.size()) {
+        result.add(list.get(i));
+        i = i + 1;
+    };
+    result
+}
+
+/**
+ * Concatenates two lists.
+ *
+ * @param list1 The first list
+ * @param list2 The second list
+ * @return A new list containing all elements from both lists
+ *
+ * @example
+ *   concat(of(1, 2), of(3, 4))  // [1, 2, 3, 4]
+ */
+fn concat<T>(list1: ArrayList, list2: ArrayList) -> ArrayList = {
+    let result = new ArrayList();
+    let i = 0;
+    while (i < list1.size()) {
+        result.add(list1.get(i));
+        i = i + 1;
+    };
+    let j = 0;
+    while (j < list2.size()) {
+        result.add(list2.get(j));
+        j = j + 1;
+    };
+    result
+}
+
+/**
+ * Flattens a list of lists into a single list.
+ *
+ * @param lists The list of lists to flatten
+ * @return A new flattened list
+ *
+ * @example
+ *   flatten(of(of(1, 2), of(3, 4)))  // [1, 2, 3, 4]
+ */
+fn flatten<T>(lists: ArrayList) -> ArrayList = {
+    let result = new ArrayList();
+    let i = 0;
+    while (i < lists.size()) {
+        let innerList = lists.get(i);
+        let j = 0;
+        while (j < innerList.size()) {
+            result.add(innerList.get(j));
+            j = j + 1;
+        };
+        i = i + 1;
+    };
+    result
+}
+
+/**
+ * Applies a function to each element and flattens the results.
+ *
+ * @param list The list to transform
+ * @param f The transformation function that returns a list
+ * @return A new flattened list
+ *
+ * @example
+ *   flatMap(of(1, 2, 3), |x| of(x, x * 10))  // [1, 10, 2, 20, 3, 30]
+ */
+fn flatMap<T, U>(list: ArrayList, f: (T) -> ArrayList) -> ArrayList = {
+    flatten(map(list, f))
+}

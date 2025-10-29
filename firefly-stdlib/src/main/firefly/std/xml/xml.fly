@@ -1,0 +1,351 @@
+/**
+ * Firefly Standard Library - XML Module
+ * 
+ * Provides XML parsing and generation using Java's built-in XML APIs.
+ * 
+ * @module firefly::std::xml
+ * @version 0.1.0
+ */
+
+module firefly::std::xml
+
+use firefly::std::result::{Result, Ok, Err}
+use firefly::std::option::{Option, Some, None}
+use javax::xml::parsers::DocumentBuilderFactory
+use javax::xml::parsers::DocumentBuilder
+use javax::xml::transform::TransformerFactory
+use javax::xml::transform::Transformer
+use javax::xml::transform::dom::DOMSource
+use javax::xml::transform::stream::StreamResult
+use javax::xml::transform::OutputKeys
+use org::w3c::dom::Document
+use org::w3c::dom::Element
+use org::w3c::dom::Node
+use org::w3c::dom::NodeList
+use java::io::StringReader
+use java::io::StringWriter
+use java::io::File
+use org::xml::sax::InputSource
+
+// ============================================================================
+// XML Parsing
+// ============================================================================
+
+/**
+ * Parses an XML string into a Document.
+ * 
+ * @param xmlStr The XML string to parse
+ * @return Result containing the parsed Document, or an error
+ * 
+ * @example
+ *   let doc = xml.parse("<root><item>value</item></root>");
+ */
+fn parse(xmlStr: String) -> Result = {
+    try {
+        let factory = DocumentBuilderFactory.newInstance();
+        let builder = factory.newDocumentBuilder();
+        let inputSource = new InputSource(new StringReader(xmlStr));
+        let doc = builder.parse(inputSource);
+        doc.getDocumentElement().normalize();
+        Ok(doc)
+    } catch (e) {
+        Err("XML parse error: " + e.getMessage())
+    }
+}
+
+/**
+ * Parses an XML file into a Document.
+ * 
+ * @param filePath The path to the XML file
+ * @return Result containing the parsed Document, or an error
+ */
+fn parseFile(filePath: String) -> Result = {
+    try {
+        let factory = DocumentBuilderFactory.newInstance();
+        let builder = factory.newDocumentBuilder();
+        let file = new File(filePath);
+        let doc = builder.parse(file);
+        doc.getDocumentElement().normalize();
+        Ok(doc)
+    } catch (e) {
+        Err("XML parse error: " + e.getMessage())
+    }
+}
+
+// ============================================================================
+// XML Generation
+// ============================================================================
+
+/**
+ * Creates a new XML Document.
+ * 
+ * @return Result containing the new Document, or an error
+ */
+fn createDocument() -> Result = {
+    try {
+        let factory = DocumentBuilderFactory.newInstance();
+        let builder = factory.newDocumentBuilder();
+        let doc = builder.newDocument();
+        Ok(doc)
+    } catch (e) {
+        Err("Failed to create document: " + e.getMessage())
+    }
+}
+
+/**
+ * Converts a Document to an XML string.
+ * 
+ * @param doc The Document to convert
+ * @return Result containing the XML string, or an error
+ * 
+ * @example
+ *   let xmlStr = xml.toString(doc);
+ */
+fn toString(doc: Object) -> Result = {
+    try {
+        let transformerFactory = TransformerFactory.newInstance();
+        let transformer = transformerFactory.newTransformer();
+        transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+        transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "no");
+        
+        let source = new DOMSource(doc);
+        let writer = new StringWriter();
+        let result = new StreamResult(writer);
+        
+        transformer.transform(source, result);
+        Ok(writer.toString())
+    } catch (e) {
+        Err("Failed to convert to string: " + e.getMessage())
+    }
+}
+
+/**
+ * Writes a Document to a file.
+ * 
+ * @param doc The Document to write
+ * @param filePath The path to write to
+ * @return Result indicating success or error
+ */
+fn writeToFile(doc: Object, filePath: String) -> Result = {
+    try {
+        let transformerFactory = TransformerFactory.newInstance();
+        let transformer = transformerFactory.newTransformer();
+        transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+        
+        let source = new DOMSource(doc);
+        let file = new File(filePath);
+        let result = new StreamResult(file);
+        
+        transformer.transform(source, result);
+        Ok("XML written to file successfully")
+    } catch (e) {
+        Err("Failed to write to file: " + e.getMessage())
+    }
+}
+
+// ============================================================================
+// DOM Manipulation
+// ============================================================================
+
+/**
+ * Creates a new element in a document.
+ * 
+ * @param doc The Document
+ * @param tagName The tag name for the element
+ * @return The created Element
+ */
+fn createElement(doc: Object, tagName: String) -> Element = {
+    doc.createElement(tagName)
+}
+
+/**
+ * Creates a text node in a document.
+ * 
+ * @param doc The Document
+ * @param text The text content
+ * @return The created text Node
+ */
+fn createTextNode(doc: Object, text: String) -> Node = {
+    doc.createTextNode(text)
+}
+
+/**
+ * Appends a child node to a parent node.
+ * 
+ * @param parent The parent Node
+ * @param child The child Node to append
+ */
+fn appendChild(parent: Object, child: Object) -> Void = {
+    parent.appendChild(child);
+}
+
+/**
+ * Sets an attribute on an element.
+ * 
+ * @param element The Element
+ * @param name The attribute name
+ * @param value The attribute value
+ */
+fn setAttribute(element: Object, name: String, value: String) -> Void = {
+    element.setAttribute(name, value);
+}
+
+/**
+ * Gets an attribute value from an element.
+ * 
+ * @param element The Element
+ * @param name The attribute name
+ * @return Option containing the attribute value, or None
+ */
+fn getAttribute(element: Object, name: String) -> Option = {
+    if (element.hasAttribute(name)) {
+        Some(element.getAttribute(name))
+    } else {
+        None()
+    }
+}
+
+/**
+ * Gets the text content of a node.
+ * 
+ * @param node The Node
+ * @return The text content
+ */
+fn getTextContent(node: Object) -> String = {
+    node.getTextContent()
+}
+
+/**
+ * Sets the text content of a node.
+ * 
+ * @param node The Node
+ * @param text The text content
+ */
+fn setTextContent(node: Object, text: String) -> Void = {
+    node.setTextContent(text);
+}
+
+// ============================================================================
+// DOM Querying
+// ============================================================================
+
+/**
+ * Gets elements by tag name.
+ * 
+ * @param doc The Document or Element
+ * @param tagName The tag name to search for
+ * @return NodeList containing matching elements
+ */
+fn getElementsByTagName(doc: Object, tagName: String) -> NodeList = {
+    doc.getElementsByTagName(tagName)
+}
+
+/**
+ * Gets the root element of a document.
+ * 
+ * @param doc The Document
+ * @return The root Element
+ */
+fn getDocumentElement(doc: Object) -> Element = {
+    doc.getDocumentElement()
+}
+
+/**
+ * Gets the tag name of an element.
+ * 
+ * @param element The Element
+ * @return The tag name
+ */
+fn getTagName(element: Object) -> String = {
+    element.getTagName()
+}
+
+/**
+ * Gets the child nodes of a node.
+ * 
+ * @param node The Node
+ * @return NodeList containing child nodes
+ */
+fn getChildNodes(node: Object) -> NodeList = {
+    node.getChildNodes()
+}
+
+/**
+ * Gets the first child of a node.
+ * 
+ * @param node The Node
+ * @return Option containing the first child, or None
+ */
+fn getFirstChild(node: Object) -> Option = {
+    let child = node.getFirstChild();
+    if (child == none) {
+        None()
+    } else {
+        Some(child)
+    }
+}
+
+/**
+ * Gets the parent node of a node.
+ * 
+ * @param node The Node
+ * @return Option containing the parent, or None
+ */
+fn getParentNode(node: Object) -> Option = {
+    let parent = node.getParentNode();
+    if (parent == none) {
+        None()
+    } else {
+        Some(parent)
+    }
+}
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
+/**
+ * Checks if a node is an element node.
+ * 
+ * @param node The Node to check
+ * @return true if the node is an element, false otherwise
+ */
+fn isElement(node: Object) -> Bool = {
+    node.getNodeType() == Node.ELEMENT_NODE
+}
+
+/**
+ * Checks if a node is a text node.
+ * 
+ * @param node The Node to check
+ * @return true if the node is a text node, false otherwise
+ */
+fn isTextNode(node: Object) -> Bool = {
+    node.getNodeType() == Node.TEXT_NODE
+}
+
+/**
+ * Gets the length of a NodeList.
+ * 
+ * @param nodeList The NodeList
+ * @return The number of nodes
+ */
+fn getLength(nodeList: Object) -> Int = {
+    nodeList.getLength()
+}
+
+/**
+ * Gets a node from a NodeList by index.
+ * 
+ * @param nodeList The NodeList
+ * @param index The index
+ * @return Option containing the node, or None
+ */
+fn item(nodeList: Object, index: Int) -> Option = {
+    if (index >= 0 && index < nodeList.getLength()) {
+        Some(nodeList.item(index))
+    } else {
+        None()
+    }
+}
+

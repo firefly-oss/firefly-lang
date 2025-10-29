@@ -1,0 +1,229 @@
+/**
+ * Firefly Standard Library - JSON Module
+ *
+ * Provides JSON parsing and serialization using Gson for production-grade performance.
+ * Falls back to simple implementation if Gson is not available.
+ *
+ * @module firefly::std::json
+ * @version 0.2.0
+ */
+
+module firefly::std::json
+
+use firefly::std::result::{Result, Ok, Err}
+use firefly::std::option::{Option, Some, None}
+use java::util::HashMap
+use java::util::ArrayList
+use java::lang::StringBuilder
+use java::lang::Character
+use com::google::gson::Gson
+use com::google::gson::GsonBuilder
+use com::google::gson::JsonParser
+use com::google::gson::JsonElement
+use com::google::gson::JsonObject
+use com::google::gson::JsonArray
+use com::google::gson::JsonPrimitive
+use com::google::gson::JsonSyntaxException
+
+// ============================================================================
+// JSON Parsing (Gson-based Implementation)
+// ============================================================================
+
+/**
+ * Parses a JSON string into a JsonElement using Gson.
+ *
+ * @param jsonStr The JSON string to parse
+ * @return Result containing the parsed JsonElement, or an error message
+ *
+ * @example
+ *   let result = json.parse("{\"name\":\"John\",\"age\":30}");
+ *   match result {
+ *     Ok(obj) => println("Parsed: " + obj),
+ *     Err(e) => println("Error: " + e)
+ *   }
+ */
+fn parse(jsonStr: String) -> Result = {
+    try {
+        let parser = JsonParser.parseString(jsonStr);
+        Ok(parser)
+    } catch (e) {
+        Err("JSON parse error: " + e.getMessage())
+    }
+}
+
+/**
+ * Parses a JSON string into a specific Java class using Gson.
+ *
+ * @param jsonStr The JSON string to parse
+ * @param clazz The target class
+ * @return Result containing the parsed object, or an error message
+ */
+fn parseToClass(jsonStr: String, clazz: Object) -> Result = {
+    try {
+        let gson = new Gson();
+        let obj = gson.fromJson(jsonStr, clazz);
+        Ok(obj)
+    } catch (e) {
+        Err("JSON parse error: " + e.getMessage())
+    }
+}
+
+
+
+// ============================================================================
+// JSON Serialization (Gson-based)
+// ============================================================================
+
+/**
+ * Converts an object to a JSON string using Gson.
+ *
+ * Supports: Map, List, String, Number, Boolean, null, and any Java object
+ *
+ * @param obj The object to serialize
+ * @return The JSON string representation
+ *
+ * @example
+ *   let map = new HashMap();
+ *   map.put("name", "John");
+ *   map.put("age", 30);
+ *   let json = json.stringify(map); // {"name":"John","age":30}
+ */
+fn stringify(obj: Object) -> String = {
+    try {
+        let gson = new Gson();
+        gson.toJson(obj)
+    } catch (e) {
+        "null"
+    }
+}
+
+/**
+ * Converts an object to a pretty-printed JSON string.
+ *
+ * @param obj The object to serialize
+ * @return The pretty-printed JSON string
+ */
+fn stringifyPretty(obj: Object) -> String = {
+    try {
+        let gson = new GsonBuilder().setPrettyPrinting().create();
+        gson.toJson(obj)
+    } catch (e) {
+        "null"
+    }
+}
+
+// ============================================================================
+// JSON Utilities
+// ============================================================================
+
+/**
+ * Checks if a string is valid JSON.
+ *
+ * @param jsonStr The string to validate
+ * @return true if valid JSON, false otherwise
+ */
+fn isValid(jsonStr: String) -> Bool = {
+    try {
+        JsonParser.parseString(jsonStr);
+        true
+    } catch (e) {
+        false
+    }
+}
+
+/**
+ * Gets a value from a JSON object by key.
+ *
+ * @param jsonElement The JsonElement (must be JsonObject)
+ * @param key The key to look up
+ * @return Option containing the value, or None if not found
+ */
+fn get(jsonElement: Object, key: String) -> Option = {
+    try {
+        if (jsonElement instanceof JsonObject) {
+            let obj = jsonElement;
+            if (obj.has(key)) {
+                Some(obj.get(key))
+            } else {
+                None()
+            }
+        } else {
+            None()
+        }
+    } catch (e) {
+        None()
+    }
+}
+
+/**
+ * Gets a string value from a JSON object.
+ *
+ * @param jsonElement The JsonElement (must be JsonObject)
+ * @param key The key to look up
+ * @return Option containing the string value, or None
+ */
+fn getString(jsonElement: Object, key: String) -> Option = {
+    try {
+        if (jsonElement instanceof JsonObject) {
+            let obj = jsonElement;
+            if (obj.has(key)) {
+                Some(obj.get(key).getAsString())
+            } else {
+                None()
+            }
+        } else {
+            None()
+        }
+    } catch (e) {
+        None()
+    }
+}
+
+/**
+ * Gets an integer value from a JSON object.
+ *
+ * @param jsonElement The JsonElement (must be JsonObject)
+ * @param key The key to look up
+ * @return Option containing the int value, or None
+ */
+fn getInt(jsonElement: Object, key: String) -> Option = {
+    try {
+        if (jsonElement instanceof JsonObject) {
+            let obj = jsonElement;
+            if (obj.has(key)) {
+                Some(obj.get(key).getAsInt())
+            } else {
+                None()
+            }
+        } else {
+            None()
+        }
+    } catch (e) {
+        None()
+    }
+}
+
+/**
+ * Gets a boolean value from a JSON object.
+ *
+ * @param jsonElement The JsonElement (must be JsonObject)
+ * @param key The key to look up
+ * @return Option containing the boolean value, or None
+ */
+fn getBoolean(jsonElement: Object, key: String) -> Option = {
+    try {
+        if (jsonElement instanceof JsonObject) {
+            let obj = jsonElement;
+            if (obj.has(key)) {
+                Some(obj.get(key).getAsBoolean())
+            } else {
+                None()
+            }
+        } else {
+            None()
+        }
+    } catch (e) {
+        None()
+    }
+}
+

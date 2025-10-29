@@ -1,0 +1,348 @@
+/**
+ * Map Collection Module
+ *
+ * Professional map (dictionary) operations library for Firefly.
+ * Provides functional operations on key-value mappings backed by java.util.HashMap.
+ *
+ * This implementation uses Java's HashMap for efficient O(1) average-case
+ * lookups and provides a functional API with lambdas for transformations.
+ *
+ * @module firefly::std::collections::map
+ * @since 1.0.0
+ * @status COMPLETE
+ */
+
+module firefly::std::collections::map
+
+use firefly::std::option::{Option, Some, None}
+use java::util::HashMap
+use java::util::ArrayList
+
+// ============================================================================
+// Type Alias
+// ============================================================================
+
+/**
+ * Map<K, V> is backed by java.util.HashMap<K, V>
+ * This provides O(1) average-case get/put/remove operations.
+ */
+
+// ============================================================================
+// Constructors
+// ============================================================================
+
+/**
+ * Creates an empty map.
+ *
+ * @return A new empty map
+ *
+ * @example
+ *   let map = empty()
+ */
+fn empty<K, V>() -> HashMap = new HashMap()
+
+/**
+ * Creates a map with a single key-value pair.
+ *
+ * @param key The key
+ * @param value The value
+ * @return A new map containing the entry
+ *
+ * @example
+ *   let map = singleton("name", "Alice")
+ */
+fn singleton<K, V>(key: K, value: V) -> HashMap = {
+    let map = new HashMap();
+    map.put(key, value);
+    map
+}
+
+// ============================================================================
+// Basic Operations
+// ============================================================================
+
+/**
+ * Returns the number of key-value pairs in the map.
+ *
+ * @param map The map to measure
+ * @return The number of entries
+ *
+ * @example
+ *   size(singleton("a", 1))  // 1
+ */
+fn size<K, V>(map: HashMap) -> Int = map.size()
+
+/**
+ * Returns true if the map is empty.
+ *
+ * @param map The map to check
+ * @return true if empty, false otherwise
+ *
+ * @example
+ *   isEmpty(empty())  // true
+ */
+fn isEmpty<K, V>(map: HashMap) -> Bool = map.isEmpty()
+
+/**
+ * Gets the value associated with the key.
+ *
+ * @param map The map to access
+ * @param key The key to look up
+ * @return Some(value) if key exists, None otherwise
+ *
+ * @example
+ *   get(singleton("name", "Alice"), "name")  // Some("Alice")
+ *   get(singleton("name", "Alice"), "age")   // None
+ */
+fn get<K, V>(map: HashMap, key: K) -> Option = {
+    if (map.containsKey(key)) {
+        Some(map.get(key))
+    } else {
+        None
+    }
+}
+
+/**
+ * Gets the value associated with the key, or returns a default.
+ *
+ * @param map The map to access
+ * @param key The key to look up
+ * @param defaultValue The default value if key doesn't exist
+ * @return The value or default
+ *
+ * @example
+ *   getOrDefault(singleton("name", "Alice"), "name", "Unknown")  // "Alice"
+ *   getOrDefault(singleton("name", "Alice"), "age", 0)           // 0
+ */
+fn getOrDefault<K, V>(map: HashMap, key: K, defaultValue: V) -> V = {
+    if (map.containsKey(key)) {
+        map.get(key)
+    } else {
+        defaultValue
+    }
+}
+
+/**
+ * Adds or updates a key-value pair in the map.
+ * Note: This mutates the map.
+ *
+ * @param map The map to modify
+ * @param key The key
+ * @param value The value
+ * @return The modified map
+ *
+ * @example
+ *   let map = empty();
+ *   put(map, "name", "Alice");
+ *   put(map, "age", 30);
+ */
+fn put<K, V>(map: HashMap, key: K, value: V) -> HashMap = {
+    map.put(key, value);
+    map
+}
+
+/**
+ * Removes a key-value pair from the map.
+ * Note: This mutates the map.
+ *
+ * @param map The map to modify
+ * @param key The key to remove
+ * @return The modified map
+ *
+ * @example
+ *   let map = singleton("name", "Alice");
+ *   remove(map, "name");
+ */
+fn remove<K, V>(map: HashMap, key: K) -> HashMap = {
+    map.remove(key);
+    map
+}
+
+/**
+ * Checks if the map contains the specified key.
+ *
+ * @param map The map to search
+ * @param key The key to find
+ * @return true if found, false otherwise
+ *
+ * @example
+ *   containsKey(singleton("name", "Alice"), "name")  // true
+ *   containsKey(singleton("name", "Alice"), "age")   // false
+ */
+fn containsKey<K, V>(map: HashMap, key: K) -> Bool = map.containsKey(key)
+
+/**
+ * Checks if the map contains the specified value.
+ *
+ * @param map The map to search
+ * @param value The value to find
+ * @return true if found, false otherwise
+ *
+ * @example
+ *   containsValue(singleton("name", "Alice"), "Alice")  // true
+ *   containsValue(singleton("name", "Alice"), "Bob")    // false
+ */
+fn containsValue<K, V>(map: HashMap, value: V) -> Bool = map.containsValue(value)
+
+// ============================================================================
+// Queries
+// ============================================================================
+
+/**
+ * Returns a list of all keys in the map.
+ *
+ * @param map The map to query
+ * @return A list of keys
+ *
+ * @example
+ *   let map = empty();
+ *   put(map, "a", 1);
+ *   put(map, "b", 2);
+ *   keys(map)  // ["a", "b"] (order not guaranteed)
+ */
+fn keys<K, V>(map: HashMap) -> ArrayList = {
+    let result = new ArrayList();
+    let keySet = map.keySet();
+    let iter = keySet.iterator();
+    while (iter.hasNext()) {
+        result.add(iter.next());
+    };
+    result
+}
+
+/**
+ * Returns a list of all values in the map.
+ *
+ * @param map The map to query
+ * @return A list of values
+ *
+ * @example
+ *   let map = empty();
+ *   put(map, "a", 1);
+ *   put(map, "b", 2);
+ *   values(map)  // [1, 2] (order not guaranteed)
+ */
+fn values<K, V>(map: HashMap) -> ArrayList = {
+    let result = new ArrayList();
+    let valueCollection = map.values();
+    let iter = valueCollection.iterator();
+    while (iter.hasNext()) {
+        result.add(iter.next());
+    };
+    result
+}
+
+// ============================================================================
+// Functional Operations
+// ============================================================================
+
+/**
+ * Transforms the values in the map using a function.
+ *
+ * @param map The map to transform
+ * @param f The transformation function
+ * @return A new map with transformed values
+ *
+ * @example
+ *   let map = singleton("age", 30);
+ *   mapValues(map, |v| v + 1)  // {"age": 31}
+ */
+fn mapValues<K, V, W>(map: HashMap, f: (V) -> W) -> HashMap = {
+    let result = new HashMap();
+    let keySet = map.keySet();
+    let iter = keySet.iterator();
+    while (iter.hasNext()) {
+        let key = iter.next();
+        let value = map.get(key);
+        result.put(key, f(value));
+    };
+    result
+}
+
+/**
+ * Filters entries that satisfy the predicate.
+ *
+ * @param map The map to filter
+ * @param predicate The filter function (takes key and value)
+ * @return A new map with only matching entries
+ *
+ * @example
+ *   let map = empty();
+ *   put(map, "a", 1);
+ *   put(map, "b", 2);
+ *   put(map, "c", 3);
+ *   filter(map, |k, v| v > 1)  // {"b": 2, "c": 3}
+ */
+fn filter<K, V>(map: HashMap, predicate: (K, V) -> Bool) -> HashMap = {
+    let result = new HashMap();
+    let keySet = map.keySet();
+    let iter = keySet.iterator();
+    while (iter.hasNext()) {
+        let key = iter.next();
+        let value = map.get(key);
+        if (predicate(key, value)) {
+            result.put(key, value);
+        };
+    };
+    result
+}
+
+/**
+ * Executes a function for each key-value pair in the map.
+ *
+ * @param map The map to iterate
+ * @param f The function to execute
+ * @return Unit
+ *
+ * @example
+ *   forEach(map, |k, v| println("{k}: {v}"))
+ */
+fn forEach<K, V>(map: HashMap, f: (K, V) -> Void) -> Void = {
+    let keySet = map.keySet();
+    let iter = keySet.iterator();
+    while (iter.hasNext()) {
+        let key = iter.next();
+        let value = map.get(key);
+        f(key, value);
+    }
+}
+
+// ============================================================================
+// Set Operations
+// ============================================================================
+
+/**
+ * Merges two maps. If a key exists in both, the value from map2 is used.
+ *
+ * @param map1 The first map
+ * @param map2 The second map
+ * @return A new map containing all entries from both maps
+ *
+ * @example
+ *   let m1 = singleton("a", 1);
+ *   let m2 = singleton("b", 2);
+ *   union(m1, m2)  // {"a": 1, "b": 2}
+ */
+fn union<K, V>(map1: HashMap, map2: HashMap) -> HashMap = {
+    let result = new HashMap();
+    result.putAll(map1);
+    result.putAll(map2);
+    result
+}
+
+/**
+ * Clears all entries from the map.
+ * Note: This mutates the map.
+ *
+ * @param map The map to clear
+ * @return The cleared map
+ *
+ * @example
+ *   let map = singleton("a", 1);
+ *   clear(map);
+ *   isEmpty(map)  // true
+ */
+fn clear<K, V>(map: HashMap) -> HashMap = {
+    map.clear();
+    map
+}

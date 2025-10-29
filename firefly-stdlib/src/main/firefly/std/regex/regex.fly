@@ -1,0 +1,358 @@
+/**
+ * Firefly Standard Library - Regular Expressions Module
+ * 
+ * Provides regular expression matching and manipulation using Java's Pattern and Matcher.
+ * 
+ * @module firefly::std::regex
+ * @version 0.1.0
+ */
+
+module firefly::std::regex
+
+use firefly::std::result::{Result, Ok, Err}
+use firefly::std::option::{Option, Some, None}
+use java::util::regex::Pattern
+use java::util::regex::Matcher
+use java::util::ArrayList
+use java::util::regex::PatternSyntaxException
+
+// ============================================================================
+// Pattern Compilation
+// ============================================================================
+
+/**
+ * Compiles a regular expression pattern.
+ * 
+ * @param pattern The regex pattern string
+ * @return Result containing the compiled Pattern, or an error message
+ * 
+ * @example
+ *   let pattern = regex.compile("\\d+");
+ *   match pattern {
+ *     Ok(p) => println("Pattern compiled"),
+ *     Err(e) => println("Error: " + e)
+ *   }
+ */
+fn compile(pattern: String) -> Result = {
+    try {
+        let p = Pattern.compile(pattern);
+        Ok(p)
+    } catch (e) {
+        Err("Failed to compile pattern: " + e.getMessage())
+    }
+}
+
+/**
+ * Compiles a regular expression pattern with flags.
+ * 
+ * @param pattern The regex pattern string
+ * @param flags Pattern flags (e.g., Pattern.CASE_INSENSITIVE)
+ * @return Result containing the compiled Pattern, or an error message
+ * 
+ * @example
+ *   let pattern = regex.compileWithFlags("hello", Pattern.CASE_INSENSITIVE);
+ */
+fn compileWithFlags(pattern: String, flags: Int) -> Result = {
+    try {
+        let p = Pattern.compile(pattern, flags);
+        Ok(p)
+    } catch (e) {
+        Err("Failed to compile pattern: " + e.getMessage())
+    }
+}
+
+// ============================================================================
+// Matching Operations
+// ============================================================================
+
+/**
+ * Tests if a string matches a regular expression pattern.
+ * 
+ * @param pattern The regex pattern string
+ * @param input The string to test
+ * @return true if the entire string matches the pattern, false otherwise
+ * 
+ * @example
+ *   let matches = regex.matches("\\d+", "12345"); // true
+ *   let matches2 = regex.matches("\\d+", "abc");  // false
+ */
+fn matches(pattern: String, input: String) -> Bool = {
+    try {
+        Pattern.matches(pattern, input)
+    } catch (e) {
+        false
+    }
+}
+
+/**
+ * Tests if a string contains a match for a regular expression pattern.
+ * 
+ * @param pattern The regex pattern string
+ * @param input The string to search
+ * @return true if the pattern is found anywhere in the string, false otherwise
+ * 
+ * @example
+ *   let found = regex.find("\\d+", "abc123def"); // true
+ */
+fn find(pattern: String, input: String) -> Bool = {
+    try {
+        let p = Pattern.compile(pattern);
+        let m = p.matcher(input);
+        m.find()
+    } catch (e) {
+        false
+    }
+}
+
+/**
+ * Finds the first match of a pattern in a string.
+ * 
+ * @param pattern The regex pattern string
+ * @param input The string to search
+ * @return Option containing the first match, or None if no match found
+ * 
+ * @example
+ *   let match = regex.findFirst("\\d+", "abc123def456");
+ *   match match {
+ *     Some(m) => println("Found: " + m), // "123"
+ *     None => println("Not found")
+ *   }
+ */
+fn findFirst(pattern: String, input: String) -> Option = {
+    try {
+        let p = Pattern.compile(pattern);
+        let m = p.matcher(input);
+        if (m.find()) {
+            Some(m.group())
+        } else {
+            None()
+        }
+    } catch (e) {
+        None()
+    }
+}
+
+/**
+ * Finds all matches of a pattern in a string.
+ * 
+ * @param pattern The regex pattern string
+ * @param input The string to search
+ * @return ArrayList containing all matches
+ * 
+ * @example
+ *   let matches = regex.findAll("\\d+", "abc123def456ghi789");
+ *   // Returns ["123", "456", "789"]
+ */
+fn findAll(pattern: String, input: String) -> ArrayList = {
+    let results = new ArrayList();
+    try {
+        let p = Pattern.compile(pattern);
+        let m = p.matcher(input);
+        while (m.find()) {
+            results.add(m.group());
+        }
+    } catch (e) {
+        // Return empty list on error
+    }
+    results
+}
+
+// ============================================================================
+// Replacement Operations
+// ============================================================================
+
+/**
+ * Replaces the first occurrence of a pattern in a string.
+ * 
+ * @param pattern The regex pattern string
+ * @param input The string to search
+ * @param replacement The replacement string
+ * @return The string with the first match replaced
+ * 
+ * @example
+ *   let result = regex.replaceFirst("\\d+", "abc123def456", "NUM");
+ *   // Returns "abcNUMdef456"
+ */
+fn replaceFirst(pattern: String, input: String, replacement: String) -> String = {
+    try {
+        let p = Pattern.compile(pattern);
+        let m = p.matcher(input);
+        m.replaceFirst(replacement)
+    } catch (e) {
+        input
+    }
+}
+
+/**
+ * Replaces all occurrences of a pattern in a string.
+ * 
+ * @param pattern The regex pattern string
+ * @param input The string to search
+ * @param replacement The replacement string
+ * @return The string with all matches replaced
+ * 
+ * @example
+ *   let result = regex.replaceAll("\\d+", "abc123def456", "NUM");
+ *   // Returns "abcNUMdefNUM"
+ */
+fn replaceAll(pattern: String, input: String, replacement: String) -> String = {
+    try {
+        let p = Pattern.compile(pattern);
+        let m = p.matcher(input);
+        m.replaceAll(replacement)
+    } catch (e) {
+        input
+    }
+}
+
+// ============================================================================
+// Splitting Operations
+// ============================================================================
+
+/**
+ * Splits a string by a regular expression pattern.
+ * 
+ * @param pattern The regex pattern string to split by
+ * @param input The string to split
+ * @return ArrayList containing the split parts
+ * 
+ * @example
+ *   let parts = regex.split("\\s+", "hello   world  foo");
+ *   // Returns ["hello", "world", "foo"]
+ */
+fn split(pattern: String, input: String) -> ArrayList = {
+    let results = new ArrayList();
+    try {
+        let p = Pattern.compile(pattern);
+        let parts = p.split(input);
+        let i = 0;
+        while (i < parts.length) {
+            results.add(parts[i]);
+            i = i + 1;
+        }
+    } catch (e) {
+        results.add(input);
+    }
+    results
+}
+
+/**
+ * Splits a string by a pattern with a limit on the number of splits.
+ * 
+ * @param pattern The regex pattern string to split by
+ * @param input The string to split
+ * @param limit Maximum number of splits
+ * @return ArrayList containing the split parts
+ * 
+ * @example
+ *   let parts = regex.splitLimit("\\s+", "a b c d e", 3);
+ *   // Returns ["a", "b", "c d e"]
+ */
+fn splitLimit(pattern: String, input: String, limit: Int) -> ArrayList = {
+    let results = new ArrayList();
+    try {
+        let p = Pattern.compile(pattern);
+        let parts = p.split(input, limit);
+        let i = 0;
+        while (i < parts.length) {
+            results.add(parts[i]);
+            i = i + 1;
+        }
+    } catch (e) {
+        results.add(input);
+    }
+    results
+}
+
+// ============================================================================
+// Escaping and Quoting
+// ============================================================================
+
+/**
+ * Escapes special regex characters in a string.
+ * 
+ * @param str The string to escape
+ * @return The escaped string that can be used as a literal pattern
+ * 
+ * @example
+ *   let escaped = regex.escape("a.b*c?"); // "a\\.b\\*c\\?"
+ */
+fn escape(str: String) -> String = {
+    Pattern.quote(str)
+}
+
+/**
+ * Creates a literal pattern from a string (escapes all special characters).
+ * 
+ * @param str The string to convert to a literal pattern
+ * @return Result containing the compiled literal Pattern
+ */
+fn literal(str: String) -> Result = {
+    try {
+        let quoted = Pattern.quote(str);
+        let p = Pattern.compile(quoted);
+        Ok(p)
+    } catch (e) {
+        Err("Failed to create literal pattern: " + e.getMessage())
+    }
+}
+
+// ============================================================================
+// Validation Helpers
+// ============================================================================
+
+/**
+ * Validates if a string is a valid email address.
+ * 
+ * @param email The email string to validate
+ * @return true if valid email format, false otherwise
+ * 
+ * @example
+ *   let valid = regex.isEmail("user@example.com"); // true
+ */
+fn isEmail(email: String) -> Bool = {
+    let pattern = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$";
+    matches(pattern, email)
+}
+
+/**
+ * Validates if a string is a valid URL.
+ * 
+ * @param url The URL string to validate
+ * @return true if valid URL format, false otherwise
+ */
+fn isURL(url: String) -> Bool = {
+    let pattern = "^(https?|ftp)://[^\\s/$.?#].[^\\s]*$";
+    matches(pattern, url)
+}
+
+/**
+ * Validates if a string contains only digits.
+ * 
+ * @param str The string to validate
+ * @return true if contains only digits, false otherwise
+ */
+fn isNumeric(str: String) -> Bool = {
+    matches("^\\d+$", str)
+}
+
+/**
+ * Validates if a string contains only alphabetic characters.
+ * 
+ * @param str The string to validate
+ * @return true if contains only letters, false otherwise
+ */
+fn isAlpha(str: String) -> Bool = {
+    matches("^[A-Za-z]+$", str)
+}
+
+/**
+ * Validates if a string contains only alphanumeric characters.
+ * 
+ * @param str The string to validate
+ * @return true if contains only letters and digits, false otherwise
+ */
+fn isAlphanumeric(str: String) -> Bool = {
+    matches("^[A-Za-z0-9]+$", str)
+}
+

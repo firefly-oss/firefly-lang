@@ -1,0 +1,343 @@
+/**
+ * Firefly Standard Library - Encoding Module
+ * 
+ * Provides encoding and decoding operations for Base64, Hex, URL, and more.
+ * 
+ * @module firefly::std::encoding
+ * @version 0.1.0
+ */
+
+module firefly::std::encoding
+
+use firefly::std::result::{Result, Ok, Err}
+use firefly::std::option::{Option, Some, None}
+use java::util::Base64
+use java::nio::charset::StandardCharsets
+use java::net::URLEncoder
+use java::net::URLDecoder
+use java::lang::StringBuilder
+
+// ============================================================================
+// Base64 Encoding/Decoding
+// ============================================================================
+
+/**
+ * Encodes a string to Base64.
+ * 
+ * @param input The string to encode
+ * @return The Base64 encoded string
+ * 
+ * @example
+ *   let encoded = encoding.base64Encode("hello world");
+ */
+fn base64Encode(input: String) -> String = {
+    let bytes = input.getBytes(StandardCharsets.UTF_8);
+    Base64.getEncoder().encodeToString(bytes)
+}
+
+/**
+ * Decodes a Base64 string.
+ * 
+ * @param input The Base64 encoded string
+ * @return Result containing the decoded string, or an error
+ * 
+ * @example
+ *   let decoded = encoding.base64Decode("aGVsbG8gd29ybGQ=");
+ */
+fn base64Decode(input: String) -> Result = {
+    try {
+        let bytes = Base64.getDecoder().decode(input);
+        let decoded = new java::lang::String(bytes, StandardCharsets.UTF_8);
+        Ok(decoded)
+    } catch (e) {
+        Err("Base64 decode error: " + e.getMessage())
+    }
+}
+
+/**
+ * Encodes bytes to Base64.
+ * 
+ * @param bytes The byte array to encode
+ * @return The Base64 encoded string
+ */
+fn base64EncodeBytes(bytes: Object) -> String = {
+    Base64.getEncoder().encodeToString(bytes)
+}
+
+/**
+ * Decodes a Base64 string to bytes.
+ * 
+ * @param input The Base64 encoded string
+ * @return Result containing the decoded bytes, or an error
+ */
+fn base64DecodeBytes(input: String) -> Result = {
+    try {
+        let bytes = Base64.getDecoder().decode(input);
+        Ok(bytes)
+    } catch (e) {
+        Err("Base64 decode error: " + e.getMessage())
+    }
+}
+
+/**
+ * Encodes a string to Base64 URL-safe format.
+ * 
+ * @param input The string to encode
+ * @return The Base64 URL-safe encoded string
+ */
+fn base64UrlEncode(input: String) -> String = {
+    let bytes = input.getBytes(StandardCharsets.UTF_8);
+    Base64.getUrlEncoder().encodeToString(bytes)
+}
+
+/**
+ * Decodes a Base64 URL-safe string.
+ * 
+ * @param input The Base64 URL-safe encoded string
+ * @return Result containing the decoded string, or an error
+ */
+fn base64UrlDecode(input: String) -> Result = {
+    try {
+        let bytes = Base64.getUrlDecoder().decode(input);
+        let decoded = new java::lang::String(bytes, StandardCharsets.UTF_8);
+        Ok(decoded)
+    } catch (e) {
+        Err("Base64 URL decode error: " + e.getMessage())
+    }
+}
+
+// ============================================================================
+// Hexadecimal Encoding/Decoding
+// ============================================================================
+
+/**
+ * Encodes a string to hexadecimal.
+ * 
+ * @param input The string to encode
+ * @return The hex encoded string
+ * 
+ * @example
+ *   let hex = encoding.hexEncode("hello"); // "68656c6c6f"
+ */
+fn hexEncode(input: String) -> String = {
+    let bytes = input.getBytes(StandardCharsets.UTF_8);
+    hexEncodeBytes(bytes)
+}
+
+/**
+ * Decodes a hexadecimal string.
+ * 
+ * @param input The hex encoded string
+ * @return Result containing the decoded string, or an error
+ */
+fn hexDecode(input: String) -> Result = {
+    try {
+        let bytes = hexDecodeBytes(input);
+        let decoded = new java::lang::String(bytes, StandardCharsets.UTF_8);
+        Ok(decoded)
+    } catch (e) {
+        Err("Hex decode error: " + e.getMessage())
+    }
+}
+
+/**
+ * Encodes bytes to hexadecimal.
+ * 
+ * @param bytes The byte array to encode
+ * @return The hex encoded string
+ */
+fn hexEncodeBytes(bytes: Object) -> String = {
+    let sb = new StringBuilder();
+    let i = 0;
+    while (i < bytes.length) {
+        let b = bytes[i];
+        let hex = java::lang::Integer.toHexString(255 & b);
+        if (hex.length() == 1) {
+            sb.append('0');
+        }
+        sb.append(hex);
+        i = i + 1;
+    }
+    sb.toString()
+}
+
+/**
+ * Decodes a hexadecimal string to bytes.
+ * 
+ * @param hex The hex encoded string
+ * @return The decoded byte array
+ */
+fn hexDecodeBytes(hex: String) -> Object = {
+    let len = hex.length();
+    let data = new java::lang::Byte[len / 2];
+    let i = 0;
+    while (i < len) {
+        data[i / 2] = java::lang::Integer.parseInt(hex.substring(i, i + 2), 16);
+        i = i + 2;
+    }
+    data
+}
+
+// ============================================================================
+// URL Encoding/Decoding
+// ============================================================================
+
+/**
+ * Encodes a string for use in a URL.
+ * 
+ * @param input The string to encode
+ * @return The URL encoded string
+ * 
+ * @example
+ *   let encoded = encoding.urlEncode("hello world"); // "hello+world"
+ */
+fn urlEncode(input: String) -> String = {
+    URLEncoder.encode(input, StandardCharsets.UTF_8)
+}
+
+/**
+ * Decodes a URL encoded string.
+ * 
+ * @param input The URL encoded string
+ * @return The decoded string
+ * 
+ * @example
+ *   let decoded = encoding.urlDecode("hello+world"); // "hello world"
+ */
+fn urlDecode(input: String) -> String = {
+    URLDecoder.decode(input, StandardCharsets.UTF_8)
+}
+
+// ============================================================================
+// Binary Encoding
+// ============================================================================
+
+/**
+ * Encodes an integer to binary string.
+ * 
+ * @param value The integer to encode
+ * @return The binary string representation
+ * 
+ * @example
+ *   let binary = encoding.toBinary(42); // "101010"
+ */
+fn toBinary(value: Int) -> String = {
+    java::lang::Integer.toBinaryString(value)
+}
+
+/**
+ * Encodes a long to binary string.
+ * 
+ * @param value The long to encode
+ * @return The binary string representation
+ */
+fn toBinaryLong(value: Long) -> String = {
+    java::lang::Long.toBinaryString(value)
+}
+
+/**
+ * Parses a binary string to an integer.
+ * 
+ * @param binary The binary string
+ * @return Result containing the integer, or an error
+ * 
+ * @example
+ *   let value = encoding.fromBinary("101010"); // Ok(42)
+ */
+fn fromBinary(binary: String) -> Result = {
+    try {
+        let value = java::lang::Integer.parseInt(binary, 2);
+        Ok(value)
+    } catch (e) {
+        Err("Binary parse error: " + e.getMessage())
+    }
+}
+
+/**
+ * Parses a binary string to a long.
+ * 
+ * @param binary The binary string
+ * @return Result containing the long, or an error
+ */
+fn fromBinaryLong(binary: String) -> Result = {
+    try {
+        let value = java::lang::Long.parseLong(binary, 2);
+        Ok(value)
+    } catch (e) {
+        Err("Binary parse error: " + e.getMessage())
+    }
+}
+
+// ============================================================================
+// Octal Encoding
+// ============================================================================
+
+/**
+ * Encodes an integer to octal string.
+ * 
+ * @param value The integer to encode
+ * @return The octal string representation
+ */
+fn toOctal(value: Int) -> String = {
+    java::lang::Integer.toOctalString(value)
+}
+
+/**
+ * Parses an octal string to an integer.
+ * 
+ * @param octal The octal string
+ * @return Result containing the integer, or an error
+ */
+fn fromOctal(octal: String) -> Result = {
+    try {
+        let value = java::lang::Integer.parseInt(octal, 8);
+        Ok(value)
+    } catch (e) {
+        Err("Octal parse error: " + e.getMessage())
+    }
+}
+
+// ============================================================================
+// Character Encoding Utilities
+// ============================================================================
+
+/**
+ * Converts a string to UTF-8 bytes.
+ * 
+ * @param input The string to convert
+ * @return The UTF-8 byte array
+ */
+fn toUtf8Bytes(input: String) -> Object = {
+    input.getBytes(StandardCharsets.UTF_8)
+}
+
+/**
+ * Converts UTF-8 bytes to a string.
+ * 
+ * @param bytes The UTF-8 byte array
+ * @return The decoded string
+ */
+fn fromUtf8Bytes(bytes: Object) -> String = {
+    new java::lang::String(bytes, StandardCharsets.UTF_8)
+}
+
+/**
+ * Converts a string to ASCII bytes.
+ * 
+ * @param input The string to convert
+ * @return The ASCII byte array
+ */
+fn toAsciiBytes(input: String) -> Object = {
+    input.getBytes(StandardCharsets.US_ASCII)
+}
+
+/**
+ * Converts ASCII bytes to a string.
+ * 
+ * @param bytes The ASCII byte array
+ * @return The decoded string
+ */
+fn fromAsciiBytes(bytes: Object) -> String = {
+    new java::lang::String(bytes, StandardCharsets.US_ASCII)
+}
+

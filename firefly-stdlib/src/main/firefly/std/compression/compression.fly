@@ -1,0 +1,333 @@
+/**
+ * Firefly Standard Library - Compression Module
+ * 
+ * Provides compression and decompression operations for Gzip, Zip, and Deflate.
+ * 
+ * @module firefly::std::compression
+ * @version 0.1.0
+ */
+
+module firefly::std::compression
+
+use firefly::std::result::{Result, Ok, Err}
+use firefly::std::option::{Option, Some, None}
+use java::util::zip::GZIPOutputStream
+use java::util::zip::GZIPInputStream
+use java::util::zip::ZipOutputStream
+use java::util::zip::ZipInputStream
+use java::util::zip::ZipEntry
+use java::util::zip::Deflater
+use java::util::zip::Inflater
+use java::io::ByteArrayOutputStream
+use java::io::ByteArrayInputStream
+use java::io::FileInputStream
+use java::io::FileOutputStream
+use java::nio::charset::StandardCharsets
+
+// ============================================================================
+// Gzip Compression/Decompression
+// ============================================================================
+
+/**
+ * Compresses a string using Gzip.
+ * 
+ * @param input The string to compress
+ * @return Result containing the compressed bytes, or an error
+ * 
+ * @example
+ *   let compressed = compression.gzipCompress("hello world");
+ */
+fn gzipCompress(input: String) -> Result = {
+    try {
+        let bytes = input.getBytes(StandardCharsets.UTF_8);
+        let result = gzipCompressBytes(bytes);
+        result
+    } catch (e) {
+        Err("Gzip compression failed: " + e.getMessage())
+    }
+}
+
+/**
+ * Compresses bytes using Gzip.
+ * 
+ * @param bytes The bytes to compress
+ * @return Result containing the compressed bytes, or an error
+ */
+fn gzipCompressBytes(bytes: Object) -> Result = {
+    try {
+        let baos = new ByteArrayOutputStream();
+        let gzos = new GZIPOutputStream(baos);
+        gzos.write(bytes);
+        gzos.close();
+        let compressed = baos.toByteArray();
+        Ok(compressed)
+    } catch (e) {
+        Err("Gzip compression failed: " + e.getMessage())
+    }
+}
+
+/**
+ * Decompresses Gzip data to a string.
+ * 
+ * @param compressed The compressed bytes
+ * @return Result containing the decompressed string, or an error
+ */
+fn gzipDecompress(compressed: Object) -> Result = {
+    try {
+        let bais = new ByteArrayInputStream(compressed);
+        let gzis = new GZIPInputStream(bais);
+        let baos = new ByteArrayOutputStream();
+        
+        let buffer = new java::lang::Byte[1024];
+        let len = gzis.read(buffer);
+        while (len > 0) {
+            baos.write(buffer, 0, len);
+            len = gzis.read(buffer);
+        }
+        
+        gzis.close();
+        baos.close();
+        
+        let decompressed = new java::lang::String(baos.toByteArray(), StandardCharsets.UTF_8);
+        Ok(decompressed)
+    } catch (e) {
+        Err("Gzip decompression failed: " + e.getMessage())
+    }
+}
+
+/**
+ * Decompresses Gzip data to bytes.
+ * 
+ * @param compressed The compressed bytes
+ * @return Result containing the decompressed bytes, or an error
+ */
+fn gzipDecompressBytes(compressed: Object) -> Result = {
+    try {
+        let bais = new ByteArrayInputStream(compressed);
+        let gzis = new GZIPInputStream(bais);
+        let baos = new ByteArrayOutputStream();
+        
+        let buffer = new java::lang::Byte[1024];
+        let len = gzis.read(buffer);
+        while (len > 0) {
+            baos.write(buffer, 0, len);
+            len = gzis.read(buffer);
+        }
+        
+        gzis.close();
+        baos.close();
+        
+        Ok(baos.toByteArray())
+    } catch (e) {
+        Err("Gzip decompression failed: " + e.getMessage())
+    }
+}
+
+// ============================================================================
+// Deflate Compression/Decompression
+// ============================================================================
+
+/**
+ * Compresses bytes using Deflate algorithm.
+ * 
+ * @param bytes The bytes to compress
+ * @return Result containing the compressed bytes, or an error
+ */
+fn deflateCompress(bytes: Object) -> Result = {
+    try {
+        let deflater = new Deflater();
+        deflater.setInput(bytes);
+        deflater.finish();
+        
+        let buffer = new java::lang::Byte[1024];
+        let baos = new ByteArrayOutputStream();
+        
+        while (!deflater.finished()) {
+            let count = deflater.deflate(buffer);
+            baos.write(buffer, 0, count);
+        }
+        
+        deflater.end();
+        Ok(baos.toByteArray())
+    } catch (e) {
+        Err("Deflate compression failed: " + e.getMessage())
+    }
+}
+
+/**
+ * Decompresses Deflate data.
+ * 
+ * @param compressed The compressed bytes
+ * @return Result containing the decompressed bytes, or an error
+ */
+fn deflateDecompress(compressed: Object) -> Result = {
+    try {
+        let inflater = new Inflater();
+        inflater.setInput(compressed);
+        
+        let buffer = new java::lang::Byte[1024];
+        let baos = new ByteArrayOutputStream();
+        
+        while (!inflater.finished()) {
+            let count = inflater.inflate(buffer);
+            baos.write(buffer, 0, count);
+        }
+        
+        inflater.end();
+        Ok(baos.toByteArray())
+    } catch (e) {
+        Err("Deflate decompression failed: " + e.getMessage())
+    }
+}
+
+// ============================================================================
+// Zip File Operations
+// ============================================================================
+
+/**
+ * Creates a Zip file with a single entry.
+ * 
+ * @param filename The name of the file inside the zip
+ * @param content The content as a string
+ * @param outputPath The path to save the zip file
+ * @return Result indicating success or error
+ * 
+ * @example
+ *   let result = compression.createZip("data.txt", "hello world", "output.zip");
+ */
+fn createZip(filename: String, content: String, outputPath: String) -> Result = {
+    try {
+        let fos = new FileOutputStream(outputPath);
+        let zos = new ZipOutputStream(fos);
+        
+        let entry = new ZipEntry(filename);
+        zos.putNextEntry(entry);
+        
+        let bytes = content.getBytes(StandardCharsets.UTF_8);
+        zos.write(bytes);
+        
+        zos.closeEntry();
+        zos.close();
+        fos.close();
+        
+        Ok("Zip file created successfully")
+    } catch (e) {
+        Err("Failed to create zip: " + e.getMessage())
+    }
+}
+
+/**
+ * Creates a Zip file with multiple entries.
+ * 
+ * @param entries A Map of filename -> content
+ * @param outputPath The path to save the zip file
+ * @return Result indicating success or error
+ */
+fn createZipMultiple(entries: Object, outputPath: String) -> Result = {
+    try {
+        let fos = new FileOutputStream(outputPath);
+        let zos = new ZipOutputStream(fos);
+        
+        let entrySet = entries.entrySet();
+        let iterator = entrySet.iterator();
+        
+        while (iterator.hasNext()) {
+            let mapEntry = iterator.next();
+            let filename = mapEntry.getKey().toString();
+            let content = mapEntry.getValue().toString();
+            
+            let zipEntry = new ZipEntry(filename);
+            zos.putNextEntry(zipEntry);
+            
+            let bytes = content.getBytes(StandardCharsets.UTF_8);
+            zos.write(bytes);
+            
+            zos.closeEntry();
+        }
+        
+        zos.close();
+        fos.close();
+        
+        Ok("Zip file created successfully")
+    } catch (e) {
+        Err("Failed to create zip: " + e.getMessage())
+    }
+}
+
+/**
+ * Extracts a Zip file to a directory.
+ * 
+ * @param zipPath The path to the zip file
+ * @param outputDir The directory to extract to
+ * @return Result indicating success or error
+ */
+fn extractZip(zipPath: String, outputDir: String) -> Result = {
+    try {
+        let fis = new FileInputStream(zipPath);
+        let zis = new ZipInputStream(fis);
+        
+        let entry = zis.getNextEntry();
+        while (entry != none) {
+            let filename = entry.getName();
+            let outputPath = outputDir + "/" + filename;
+            
+            let fos = new FileOutputStream(outputPath);
+            let buffer = new java::lang::Byte[1024];
+            let len = zis.read(buffer);
+            
+            while (len > 0) {
+                fos.write(buffer, 0, len);
+                len = zis.read(buffer);
+            }
+            
+            fos.close();
+            zis.closeEntry();
+            entry = zis.getNextEntry();
+        }
+        
+        zis.close();
+        fis.close();
+        
+        Ok("Zip file extracted successfully")
+    } catch (e) {
+        Err("Failed to extract zip: " + e.getMessage())
+    }
+}
+
+// ============================================================================
+// Compression Utilities
+// ============================================================================
+
+/**
+ * Calculates the compression ratio.
+ * 
+ * @param originalSize The original size in bytes
+ * @param compressedSize The compressed size in bytes
+ * @return The compression ratio as a percentage
+ */
+fn compressionRatio(originalSize: Int, compressedSize: Int) -> Float = {
+    if (originalSize == 0) {
+        0.0
+    } else {
+        let ratio = compressedSize / originalSize;
+        ratio * 100.0
+    }
+}
+
+/**
+ * Calculates the space saved by compression.
+ * 
+ * @param originalSize The original size in bytes
+ * @param compressedSize The compressed size in bytes
+ * @return The space saved as a percentage
+ */
+fn spaceSaved(originalSize: Int, compressedSize: Int) -> Float = {
+    if (originalSize == 0) {
+        0.0
+    } else {
+        let saved = originalSize - compressedSize;
+        let ratio = saved / originalSize;
+        ratio * 100.0
+    }
+}
+

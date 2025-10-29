@@ -1,0 +1,49 @@
+/**
+ * Firefly Standard Library Prelude
+ *
+ * This module provides convenient access to commonly used types and functions
+ * from the standard library. While Firefly doesn't yet support re-exports,
+ * this module serves as documentation for what should be commonly imported.
+ *
+ * Recommended imports for most Firefly programs:
+ * ```
+ * import firefly::std::option::{Option, Some, None}
+ * import firefly::std::result::{Result, Ok, Err}
+ * import firefly::std::collections::list
+ * import firefly::std::collections::map
+ * import firefly::std::collections::set
+ * import firefly::std::io
+ * import firefly::std::fs
+ * ```
+ *
+ * Common Types:
+ * - Option<T>: Optional values (Some, None)
+ * - Result<T, E>: Error handling (Ok, Err)
+ * - List<T>: Dynamic arrays
+ * - Map<K, V>: Hash maps
+ * - Set<T>: Hash sets
+ *
+ * Common Modules:
+ * - io: Input/output operations
+ * - fs: File system operations
+ * - math: Mathematical functions
+ * - string: String utilities
+ * - time: Time and date operations
+ *
+ * @module firefly::std::prelude
+ * @since 1.0.0
+ * @status DOCUMENTATION
+ */
+
+module firefly::std::prelude
+
+// Note: This module is primarily for documentation purposes.
+// Import the modules you need directly from their respective packages.
+
+/**
+ * Documentation function - not meant to be called.
+ * See module documentation for recommended imports.
+ *
+ * @return Always returns 0
+ */
+fn preludeInfo() -> Int = 0

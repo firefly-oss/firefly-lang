@@ -1,0 +1,405 @@
+/**
+ * Set Collection Module
+ *
+ * Professional set operations library for Firefly.
+ * Provides functional operations on unique element collections backed by java.util.HashSet.
+ *
+ * This implementation uses Java's HashSet for efficient O(1) average-case
+ * operations and provides a functional API with lambdas for transformations.
+ *
+ * @module firefly::std::collections::set
+ * @since 1.0.0
+ * @status COMPLETE
+ */
+
+module firefly::std::collections::set
+
+use firefly::std::option::{Option, Some, None}
+use java::util::HashSet
+use java::util::ArrayList
+
+// ============================================================================
+// Type Alias
+// ============================================================================
+
+/**
+ * Set<T> is backed by java.util.HashSet<T>
+ * This provides O(1) average-case add/remove/contains operations.
+ */
+
+// ============================================================================
+// Constructors
+// ============================================================================
+
+/**
+ * Creates an empty set.
+ *
+ * @return A new empty set
+ *
+ * @example
+ *   let set = empty()
+ */
+fn empty<T>() -> HashSet = new HashSet()
+
+/**
+ * Creates a set with a single element.
+ *
+ * @param element The element to add
+ * @return A new set containing the element
+ *
+ * @example
+ *   let set = singleton(42)
+ */
+fn singleton<T>(element: T) -> HashSet = {
+    let set = new HashSet();
+    set.add(element);
+    set
+}
+
+/**
+ * Creates a set from varargs.
+ *
+ * @param elements Variable number of elements
+ * @return A new set containing all unique elements
+ *
+ * @example
+ *   let set = of(1, 2, 3, 2, 1)  // {1, 2, 3}
+ */
+fn of<T>(elements: T...) -> HashSet = {
+    let set = new HashSet();
+    let i = 0;
+    while (i < elements.length) {
+        set.add(elements[i]);
+        i = i + 1;
+    };
+    set
+}
+
+// ============================================================================
+// Basic Operations
+// ============================================================================
+
+/**
+ * Returns the number of elements in the set.
+ *
+ * @param set The set to measure
+ * @return The number of elements
+ *
+ * @example
+ *   size(of(1, 2, 3))  // 3
+ */
+fn size<T>(set: HashSet) -> Int = set.size()
+
+/**
+ * Returns true if the set is empty.
+ *
+ * @param set The set to check
+ * @return true if empty, false otherwise
+ *
+ * @example
+ *   isEmpty(empty())  // true
+ *   isEmpty(of(1))    // false
+ */
+fn isEmpty<T>(set: HashSet) -> Bool = set.isEmpty()
+
+/**
+ * Checks if the set contains the specified element.
+ *
+ * @param set The set to search
+ * @param element The element to find
+ * @return true if found, false otherwise
+ *
+ * @example
+ *   contains(of(1, 2, 3), 2)  // true
+ *   contains(of(1, 2, 3), 5)  // false
+ */
+fn contains<T>(set: HashSet, element: T) -> Bool = set.contains(element)
+
+/**
+ * Adds an element to the set.
+ * Note: This mutates the set.
+ *
+ * @param set The set to modify
+ * @param element The element to add
+ * @return The modified set
+ *
+ * @example
+ *   let set = empty();
+ *   add(set, 42);
+ *   add(set, 43);
+ */
+fn add<T>(set: HashSet, element: T) -> HashSet = {
+    set.add(element);
+    set
+}
+
+/**
+ * Removes an element from the set.
+ * Note: This mutates the set.
+ *
+ * @param set The set to modify
+ * @param element The element to remove
+ * @return The modified set
+ *
+ * @example
+ *   let set = of(1, 2, 3);
+ *   remove(set, 2);
+ */
+fn remove<T>(set: HashSet, element: T) -> HashSet = {
+    set.remove(element);
+    set
+}
+
+// ============================================================================
+// Set Algebra
+// ============================================================================
+
+/**
+ * Returns the union of two sets (all elements from both sets).
+ *
+ * @param set1 The first set
+ * @param set2 The second set
+ * @return A new set containing all elements from both sets
+ *
+ * @example
+ *   union(of(1, 2), of(2, 3))  // {1, 2, 3}
+ */
+fn union<T>(set1: HashSet, set2: HashSet) -> HashSet = {
+    let result = new HashSet();
+    result.addAll(set1);
+    result.addAll(set2);
+    result
+}
+
+/**
+ * Returns the intersection of two sets (elements in both sets).
+ *
+ * @param set1 The first set
+ * @param set2 The second set
+ * @return A new set containing only common elements
+ *
+ * @example
+ *   intersect(of(1, 2, 3), of(2, 3, 4))  // {2, 3}
+ */
+fn intersect<T>(set1: HashSet, set2: HashSet) -> HashSet = {
+    let result = new HashSet();
+    result.addAll(set1);
+    result.retainAll(set2);
+    result
+}
+
+/**
+ * Returns the difference of two sets (elements in set1 but not in set2).
+ *
+ * @param set1 The first set
+ * @param set2 The second set
+ * @return A new set containing elements only in set1
+ *
+ * @example
+ *   difference(of(1, 2, 3), of(2, 3, 4))  // {1}
+ */
+fn difference<T>(set1: HashSet, set2: HashSet) -> HashSet = {
+    let result = new HashSet();
+    result.addAll(set1);
+    result.removeAll(set2);
+    result
+}
+
+// ============================================================================
+// Set Relations
+// ============================================================================
+
+/**
+ * Checks if set1 is a subset of set2 (all elements of set1 are in set2).
+ *
+ * @param set1 The potential subset
+ * @param set2 The potential superset
+ * @return true if set1 is a subset of set2
+ *
+ * @example
+ *   isSubset(of(1, 2), of(1, 2, 3))  // true
+ *   isSubset(of(1, 4), of(1, 2, 3))  // false
+ */
+fn isSubset<T>(set1: HashSet, set2: HashSet) -> Bool = {
+    let iter = set1.iterator();
+    while (iter.hasNext()) {
+        if (!set2.contains(iter.next())) {
+            return false;
+        };
+    };
+    true
+}
+
+/**
+ * Checks if set1 is a superset of set2 (all elements of set2 are in set1).
+ *
+ * @param set1 The potential superset
+ * @param set2 The potential subset
+ * @return true if set1 is a superset of set2
+ *
+ * @example
+ *   isSuperset(of(1, 2, 3), of(1, 2))  // true
+ *   isSuperset(of(1, 2, 3), of(1, 4))  // false
+ */
+fn isSuperset<T>(set1: HashSet, set2: HashSet) -> Bool = isSubset(set2, set1)
+
+/**
+ * Checks if two sets are disjoint (have no common elements).
+ *
+ * @param set1 The first set
+ * @param set2 The second set
+ * @return true if sets have no common elements
+ *
+ * @example
+ *   isDisjoint(of(1, 2), of(3, 4))  // true
+ *   isDisjoint(of(1, 2), of(2, 3))  // false
+ */
+fn isDisjoint<T>(set1: HashSet, set2: HashSet) -> Bool = {
+    let iter = set1.iterator();
+    while (iter.hasNext()) {
+        if (set2.contains(iter.next())) {
+            return false;
+        };
+    };
+    true
+}
+
+// ============================================================================
+// Functional Operations
+// ============================================================================
+
+/**
+ * Applies a function to each element and returns a new set with the results.
+ *
+ * @param set The set to transform
+ * @param f The transformation function
+ * @return A new set with transformed elements
+ *
+ * @example
+ *   map(of(1, 2, 3), |x| x * 2)  // {2, 4, 6}
+ */
+fn map<T, U>(set: HashSet, f: (T) -> U) -> HashSet = {
+    let result = new HashSet();
+    let iter = set.iterator();
+    while (iter.hasNext()) {
+        result.add(f(iter.next()));
+    };
+    result
+}
+
+/**
+ * Filters elements that satisfy the predicate.
+ *
+ * @param set The set to filter
+ * @param predicate The filter function
+ * @return A new set with only matching elements
+ *
+ * @example
+ *   filter(of(1, 2, 3, 4), |x| x > 2)  // {3, 4}
+ */
+fn filter<T>(set: HashSet, predicate: (T) -> Bool) -> HashSet = {
+    let result = new HashSet();
+    let iter = set.iterator();
+    while (iter.hasNext()) {
+        let elem = iter.next();
+        if (predicate(elem)) {
+            result.add(elem);
+        };
+    };
+    result
+}
+
+/**
+ * Executes a function for each element in the set.
+ *
+ * @param set The set to iterate
+ * @param f The function to execute
+ * @return Unit
+ *
+ * @example
+ *   forEach(of(1, 2, 3), |x| println(x))
+ */
+fn forEach<T>(set: HashSet, f: (T) -> Void) -> Void = {
+    let iter = set.iterator();
+    while (iter.hasNext()) {
+        f(iter.next());
+    }
+}
+
+/**
+ * Tests if all elements satisfy the predicate.
+ *
+ * @param set The set to test
+ * @param predicate The test function
+ * @return true if all elements match, false otherwise
+ *
+ * @example
+ *   all(of(2, 4, 6), |x| x % 2 == 0)  // true
+ *   all(of(1, 2, 3), |x| x % 2 == 0)  // false
+ */
+fn all<T>(set: HashSet, predicate: (T) -> Bool) -> Bool = {
+    let iter = set.iterator();
+    while (iter.hasNext()) {
+        if (!predicate(iter.next())) {
+            return false;
+        };
+    };
+    true
+}
+
+/**
+ * Tests if any element satisfies the predicate.
+ *
+ * @param set The set to test
+ * @param predicate The test function
+ * @return true if any element matches, false otherwise
+ *
+ * @example
+ *   any(of(1, 2, 3), |x| x > 2)  // true
+ *   any(of(1, 2, 3), |x| x > 5)  // false
+ */
+fn any<T>(set: HashSet, predicate: (T) -> Bool) -> Bool = {
+    let iter = set.iterator();
+    while (iter.hasNext()) {
+        if (predicate(iter.next())) {
+            return true;
+        };
+    };
+    false
+}
+
+// ============================================================================
+// Conversions
+// ============================================================================
+
+/**
+ * Converts the set to a list.
+ *
+ * @param set The set to convert
+ * @return A list containing all elements (order not guaranteed)
+ *
+ * @example
+ *   toList(of(1, 2, 3))  // [1, 2, 3] (order may vary)
+ */
+fn toList<T>(set: HashSet) -> ArrayList = {
+    let result = new ArrayList();
+    result.addAll(set);
+    result
+}
+
+/**
+ * Clears all elements from the set.
+ * Note: This mutates the set.
+ *
+ * @param set The set to clear
+ * @return The cleared set
+ *
+ * @example
+ *   let set = of(1, 2, 3);
+ *   clear(set);
+ *   isEmpty(set)  // true
+ */
+fn clear<T>(set: HashSet) -> HashSet = {
+    set.clear();
+    set
+}

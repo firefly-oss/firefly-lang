@@ -1,0 +1,212 @@
+/**
+ * Result<T, E> - Type for operations that can succeed or fail
+ *
+ * Result is used for error handling in Firefly. It represents either success (Ok)
+ * or failure (Err), allowing explicit error handling without exceptions.
+ *
+ * @param T The type of the success value
+ * @param E The type of the error value
+ */
+module firefly::std::result
+
+use firefly::std::option::{Option, Some, None}
+
+/**
+ * Result type - represents success or failure
+ */
+data Result<T, E> {
+    Ok(T),
+    Err(E)
+}
+
+/**
+ * Returns true if the result is Ok
+ *
+ * @param result The result to check
+ * @return true if Ok, false if Err
+ */
+fn isOk<T, E>(result: Result<T, E>) -> Bool = match result {
+    Ok(_) => true,
+    Err(_) => false
+}
+
+/**
+ * Returns true if the result is Err
+ *
+ * @param result The result to check
+ * @return true if Err, false if Ok
+ */
+fn isErr<T, E>(result: Result<T, E>) -> Bool = match result {
+    Ok(_) => false,
+    Err(_) => true
+}
+
+/**
+ * Converts from Result<T, E> to Option<T>
+ *
+ * @param result The result to convert
+ * @return Some(value) if Ok, None if Err
+ */
+fn toOption<T, E>(result: Result<T, E>) -> Option<T> = match result {
+    Ok(value) => Some(value),
+    Err(_) => None
+}
+
+/**
+ * Converts from Result<T, E> to Option<E>
+ *
+ * @param result The result to convert
+ * @return Some(error) if Err, None if Ok
+ */
+fn toError<T, E>(result: Result<T, E>) -> Option<E> = match result {
+    Ok(_) => None,
+    Err(error) => Some(error)
+}
+
+/**
+ * Unwraps the Ok value or returns a default
+ *
+ * @param result The result to unwrap
+ * @param defaultValue The default value if Err
+ * @return The Ok value or default
+ */
+fn unwrapOr<T, E>(result: Result<T, E>, defaultValue: T) -> T = match result {
+    Ok(value) => value,
+    Err(_) => defaultValue
+}
+
+/**
+ * Returns the Ok value or computes it from the error
+ *
+ * @param result The result to unwrap
+ * @param f Function to compute default from error
+ * @return The Ok value or computed default
+ */
+fn unwrapOrElse<T, E>(result: Result<T, E>, f: (E) -> T) -> T = match result {
+    Ok(value) => value,
+    Err(error) => f(error)
+}
+
+/**
+ * Maps a Result<T, E> to Result<U, E> by applying a function to Ok value
+ *
+ * @param result The result to map
+ * @param f The mapping function
+ * @return Result with mapped Ok value
+ */
+fn map<T, U, E>(result: Result<T, E>, f: (T) -> U) -> Result<U, E> = match result {
+    Ok(value) => Ok(f(value)),
+    Err(error) => Err(error)
+}
+
+/**
+ * Maps a Result<T, E> to Result<T, F> by applying a function to Err value
+ *
+ * @param result The result to map
+ * @param f The mapping function for errors
+ * @return Result with mapped Err value
+ */
+fn mapErr<T, E, F>(result: Result<T, E>, f: (E) -> F) -> Result<T, F> = match result {
+    Ok(value) => Ok(value),
+    Err(error) => Err(f(error))
+}
+
+/**
+ * Flat map (chain) operations that return Results
+ *
+ * @param result The result to flat map
+ * @param f Function that returns a new Result
+ * @return The result of applying f, or the original Err
+ */
+fn flatMap<T, U, E>(result: Result<T, E>, f: (T) -> Result<U, E>) -> Result<U, E> = match result {
+    Ok(value) => f(value),
+    Err(error) => Err(error)
+}
+
+/**
+ * Alias for flatMap (Rust-style naming)
+ */
+fn andThen<T, U, E>(result: Result<T, E>, f: (T) -> Result<U, E>) -> Result<U, E> = flatMap(result, f)
+
+/**
+ * Return result if Ok, otherwise return other
+ *
+ * @param result The first result
+ * @param other The alternative result
+ * @return result if Ok, otherwise other
+ */
+fn and<T, U, E>(result: Result<T, E>, other: Result<U, E>) -> Result<U, E> = match result {
+    Ok(_) => other,
+    Err(error) => Err(error)
+}
+
+/**
+ * Return result if Err, otherwise return other
+ *
+ * @param result The first result
+ * @param other The alternative result
+ * @return result if Err, otherwise other
+ */
+fn or<T, E>(result: Result<T, E>, other: Result<T, E>) -> Result<T, E> = match result {
+    Ok(value) => Ok(value),
+    Err(_) => other
+}
+
+/**
+ * Return result if Err, otherwise compute alternative
+ *
+ * @param result The first result
+ * @param f Function to compute alternative
+ * @return result if Err, otherwise f()
+ */
+fn orElse<T, E>(result: Result<T, E>, f: (E) -> Result<T, E>) -> Result<T, E> = match result {
+    Ok(value) => Ok(value),
+    Err(error) => f(error)
+}
+
+/**
+ * Apply a function to both Ok and Err values
+ *
+ * @param result The result to fold
+ * @param ifErr Function to apply to Err value
+ * @param ifOk Function to apply to Ok value
+ * @return The result of applying the appropriate function
+ */
+fn fold<T, E, U>(result: Result<T, E>, ifErr: (E) -> U, ifOk: (T) -> U) -> U = match result {
+    Ok(value) => ifOk(value),
+    Err(error) => ifErr(error)
+}
+
+/**
+ * Transpose a Result of an Option into an Option of a Result
+ *
+ * Converts Result<Option<T>, E> to Option<Result<T, E> >
+ * - Ok(Some(x)) becomes Some(Ok(x))
+ * - Ok(None) becomes None
+ * - Err(e) becomes Some(Err(e))
+ *
+ * Note: Space before >> is required to avoid conflict with send operator
+ */
+fn transpose<T, E>(result: Result<Option<T>, E>) -> Option<Result<T, E> > = match result {
+    Ok(opt) => match opt {
+        Some(value) => Some(Ok(value)),
+        None => None
+    },
+    Err(error) => Some(Err(error))
+}
+
+/**
+ * Flatten a nested Result
+ *
+ * Converts Result<Result<T, E>, E> to Result<T, E>
+ * - Ok(Ok(x)) becomes Ok(x)
+ * - Ok(Err(e)) becomes Err(e)
+ * - Err(e) becomes Err(e)
+ *
+ * Note: Space before >> is required to avoid conflict with send operator
+ */
+fn flatten<T, E>(result: Result<Result<T, E>, E>) -> Result<T, E> = match result {
+    Ok(inner) => inner,
+    Err(error) => Err(error)
+}
+
