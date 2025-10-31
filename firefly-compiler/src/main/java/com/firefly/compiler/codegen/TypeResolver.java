@@ -84,6 +84,9 @@ public class TypeResolver {
 
         // Import firefly::std::string module
         addWildcardImport("firefly::std::string");
+        
+        // Import firefly::std::time module (Date, DateTime, Instant, Duration)
+        addWildcardImport("firefly::std::time");
 
         // Import Firefly runtime collections
         addWildcardImport("com::firefly::runtime::collections");

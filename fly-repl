@@ -1,0 +1,13 @@
+#!/bin/bash
+# Firefly REPL wrapper script
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+JAR_FILE="$SCRIPT_DIR/firefly-repl/target/firefly-repl-1.0-Alpha.jar"
+
+if [ ! -f "$JAR_FILE" ]; then
+    echo "Error: REPL jar not found at $JAR_FILE"
+    echo "Please run: mvn package -DskipTests"
+    exit 1
+fi
+
+exec java -jar "$JAR_FILE" "$@"

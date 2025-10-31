@@ -1,0 +1,13 @@
+module test
+
+class Main {
+  pub let mut x: Int;
+
+  pub init () {
+    this.x = 20;
+  }
+
+  pub fn fly(args: [String]) -> Void {
+    // Do nothing
+  }
+}

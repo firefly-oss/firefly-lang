@@ -1,0 +1,92 @@
+/**
+ * Firefly DateTime Type
+ * 
+ * Represents a date and time without timezone information.
+ * This is Firefly's native datetime type, internally backed by java.time.LocalDateTime
+ * but exposed with Firefly-idiomatic APIs.
+ *
+ * @module firefly::std::time::DateTime
+ * @since 1.0.0
+ */
+
+module firefly::std::time
+
+use java::time::LocalDateTime
+
+/**
+ * DateTime represents a date and time (year, month, day, hour, minute, second) without timezone.
+ * 
+ * Examples:
+ * ```firefly
+ * let now = DateTime.now()
+ * let meeting = DateTime.of(2025, 10, 31, 14, 30, 0)
+ * let later = now.plusHours(2)
+ * ```
+ */
+class DateTime {
+    priv let internal: LocalDateTime;
+    
+    priv init(ldt: LocalDateTime) {
+        self.internal = ldt;
+    }
+    
+    pub static fn now() -> DateTime {
+        return new DateTime(LocalDateTime::now());
+    }
+    
+    pub static fn of(year: Int, month: Int, day: Int, hour: Int, minute: Int, second: Int) -> DateTime {
+        return new DateTime(LocalDateTime::of(year, month, day, hour, minute, second));
+    }
+    
+    pub static fn parse(text: String) -> DateTime {
+        return new DateTime(LocalDateTime::parse(text));
+    }
+    
+    pub fn year() -> Int {
+        return self.internal::getYear();
+    }
+    
+    pub fn month() -> Int {
+        return self.internal::getMonthValue();
+    }
+    
+    pub fn day() -> Int {
+        return self.internal::getDayOfMonth();
+    }
+    
+    pub fn hour() -> Int {
+        return self.internal::getHour();
+    }
+    
+    pub fn minute() -> Int {
+        return self.internal::getMinute();
+    }
+    
+    pub fn second() -> Int {
+        return self.internal::getSecond();
+    }
+    
+    pub fn plusHours(hours: Int) -> DateTime {
+        return new DateTime(self.internal::plusHours(hours));
+    }
+    
+    pub fn plusMinutes(minutes: Int) -> DateTime {
+        return new DateTime(self.internal::plusMinutes(minutes));
+    }
+    
+    pub fn plusDays(days: Int) -> DateTime {
+        return new DateTime(self.internal::plusDays(days));
+    }
+    
+    pub fn isBefore(other: DateTime) -> Bool {
+        return self.internal::isBefore(other.internal);
+    }
+    
+    pub fn isAfter(other: DateTime) -> Bool {
+        return self.internal::isAfter(other.internal);
+    }
+    
+    pub fn toString() -> String {
+        return self.internal::toString();
+    }
+}

@@ -1,0 +1,89 @@
+/**
+ * Firefly Instant Type
+ * 
+ * Represents an instantaneous point on the timeline (timestamp).
+ * This is Firefly's native timestamp type, internally backed by java.time.Instant
+ * but exposed with Firefly-idiomatic APIs.
+ *
+ * @module firefly::std::time::Instant
+ * @since 1.0.0
+ */
+
+module firefly::std::time
+
+/**
+ * Instant represents a precise moment on the global timeline.
+ * Unlike Date or DateTime, Instant is always in UTC.
+ * 
+ * Examples:
+ * ```firefly
+ * let now = Instant.now()
+ * let epoch = Instant.ofEpochSecond(0)
+ * let later = now.plusSeconds(3600)
+ * ```
+ */
+class Instant {
+    priv let internal: Object;
+    
+    priv init(inst: Object) {
+        self.internal = inst;
+    }
+    
+    pub static fn now() -> Instant {
+        return new Instant(java.time.Instant::now());
+    }
+    
+    pub static fn ofEpochSecond(seconds: Long) -> Instant {
+        return new Instant(java.time.Instant::ofEpochSecond(seconds));
+    }
+    
+    pub static fn ofEpochMilli(millis: Long) -> Instant {
+        return new Instant(java.time.Instant::ofEpochMilli(millis));
+    }
+    
+    pub static fn parse(text: String) -> Instant {
+        return new Instant(java.time.Instant::parse(text));
+    }
+    
+    pub fn toEpochSecond() -> Long {
+        let javaInst: java.time.Instant = self.internal;
+        return javaInst::getEpochSecond();
+    }
+    
+    pub fn toEpochMilli() -> Long {
+        let javaInst: java.time.Instant = self.internal;
+        return javaInst::toEpochMilli();
+    }
+    
+    pub fn plusSeconds(seconds: Long) -> Instant {
+        let javaInst: java.time.Instant = self.internal;
+        return new Instant(javaInst::plusSeconds(seconds));
+    }
+    
+    pub fn plusMillis(millis: Long) -> Instant {
+        let javaInst: java.time.Instant = self.internal;
+        return new Instant(javaInst::plusMillis(millis));
+    }
+    
+    pub fn minusSeconds(seconds: Long) -> Instant {
+        let javaInst: java.time.Instant = self.internal;
+        return new Instant(javaInst::minusSeconds(seconds));
+    }
+    
+    pub fn isBefore(other: Instant) -> Bool {
+        let javaInst: java.time.Instant = self.internal;
+        let otherInst: java.time.Instant = other.internal;
+        return javaInst::isBefore(otherInst);
+    }
+    
+    pub fn isAfter(other: Instant) -> Bool {
+        let javaInst: java.time.Instant = self.internal;
+        let otherInst: java.time.Instant = other.internal;
+        return javaInst::isAfter(otherInst);
+    }
+    
+    pub fn toString() -> String {
+        let javaInst: java.time.Instant = self.internal;
+        return javaInst::toString();
+    }
+}

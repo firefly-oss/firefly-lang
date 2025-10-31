@@ -91,15 +91,17 @@ public class ReplEngine {
     
     /**
      * Custom classloader for REPL-generated classes.
+     * Also has access to stdlib classes via parent classloader.
      */
     private static class ReplClassLoader extends ClassLoader {
         private final Map<String, byte[]> classBytes = new HashMap<>();
         
         ReplClassLoader() {
-            super(ReplClassLoader.class.getClassLoader());
+            // Use system classloader as parent to access stdlib JAR
+            super(Thread.currentThread().getContextClassLoader());
         }
         
-        void defineClass(String name, byte[]bytes) {
+        void defineClass(String name, byte[] bytes) {
             classBytes.put(name, bytes);
         }
         
@@ -109,6 +111,7 @@ public class ReplEngine {
             if (bytes != null) {
                 return defineClass(name, bytes, 0, bytes.length);
             }
+            // Parent will handle stdlib and other JARs
             return super.findClass(name);
         }
     }
