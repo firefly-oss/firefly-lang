@@ -455,6 +455,17 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
     }
     
     @Override
+    public Statement visitFieldAssignmentStmt(FireflyParser.FieldAssignmentStmtContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+        Expression object = (Expression) visit(ctx.expression(0));
+        String fieldName = ctx.IDENTIFIER().getText();
+        Expression value = (Expression) visit(ctx.expression(1));
+        Expression fieldAccess = new FieldAccessExpr(object, fieldName, false, loc);
+        Expression assignment = new AssignmentExpr(fieldAccess, value, loc);
+        return new ExprStatement(assignment, loc);
+    }
+    
+    @Override
     public Expression visitForExpr(FireflyParser.ForExprContext ctx) {
         SourceLocation loc = getLocation(ctx);
         return (Expression) visit(ctx.forExpression());
@@ -528,9 +539,16 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
             varName = ((VariablePattern) pattern).getName();
             // Default to Throwable if no type specified
             exceptionType = new NamedType("Throwable");
-        } else {
-            // For now, just handle as a wildcard
-            // TODO: Handle more complex patterns
+        } else if (pattern instanceof com.firefly.compiler.ast.pattern.TypedVariablePattern) {
+            // Typed variable pattern: catch (e: SomeException) { ... }
+            com.firefly.compiler.ast.pattern.TypedVariablePattern tvp =
+                (com.firefly.compiler.ast.pattern.TypedVariablePattern) pattern;
+            varName = tvp.getName();
+            exceptionType = tvp.getType();
+        } else if (pattern instanceof com.firefly.compiler.ast.pattern.WildcardPattern) {
+            // catch (_) { ... }
+            varName = null;
+            exceptionType = new NamedType("Throwable");
         }
         
         return new TryExpr.CatchClause(varName, exceptionType, handler);
@@ -915,11 +933,22 @@ public class AstBuilder extends FireflyBaseVisitor<AstNode> {
         return new com.firefly.compiler.ast.pattern.OrPattern(left, right, loc);
     }
 
-    // TODO: ConstructorPattern not in current grammar
-    // @Override
-    // public Pattern visitConstructorPattern(FireflyParser.ConstructorPatternContext ctx) {
-    //     ...
-    // }
+    @Override
+    public Pattern visitRangePattern(FireflyParser.RangePatternContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+        com.firefly.compiler.ast.expr.Expression start = (com.firefly.compiler.ast.expr.Expression) visit(ctx.expression(0));
+        com.firefly.compiler.ast.expr.Expression end = (com.firefly.compiler.ast.expr.Expression) visit(ctx.expression(1));
+        return new com.firefly.compiler.ast.pattern.RangePattern(start, end, false, loc);
+    }
+
+    @Override
+    public Pattern visitRangeInclusivePattern(FireflyParser.RangeInclusivePatternContext ctx) {
+        SourceLocation loc = getLocation(ctx);
+        com.firefly.compiler.ast.expr.Expression start = (com.firefly.compiler.ast.expr.Expression) visit(ctx.expression(0));
+        com.firefly.compiler.ast.expr.Expression end = (com.firefly.compiler.ast.expr.Expression) visit(ctx.expression(1));
+        return new com.firefly.compiler.ast.pattern.RangePattern(start, end, true, loc);
+    }
+
 
     @Override
     public Pattern visitTupleStructPattern(FireflyParser.TupleStructPatternContext ctx) {
