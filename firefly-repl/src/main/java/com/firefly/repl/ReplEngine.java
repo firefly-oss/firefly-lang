@@ -405,10 +405,17 @@ public class ReplEngine {
             // Build Main class with all variables as fields
             source.append("class Main {\n");
             
-            // Declare all variables as fields
+            // Declare all variables as fields (nullable for custom types)
             for (VariableInfo var : variables.values()) {
+                // Check if it's a primitive type
+                boolean isPrimitive = isPrimitiveType(var.type);
                 source.append("  pub let mut ").append(var.name)
-                      .append(": ").append(var.type).append(";\n");
+                      .append(": ").append(var.type);
+                // Add ? for non-primitive types to make them nullable
+                if (!isPrimitive) {
+                    source.append("?");
+                }
+                source.append(";\n");
             }
             
             if (!variables.isEmpty()) {
@@ -419,7 +426,8 @@ public class ReplEngine {
             if (!variables.isEmpty()) {
                 source.append("  pub init() {\n");
                 for (VariableInfo var : variables.values()) {
-                    String defaultValue = getDefaultValue(var.type);
+                    boolean isPrimitive = isPrimitiveType(var.type);
+                    String defaultValue = isPrimitive ? getDefaultValue(var.type) : "none";
                     source.append("    self.").append(var.name)
                           .append(" = ").append(defaultValue).append(";\n");
                 }
@@ -433,9 +441,14 @@ public class ReplEngine {
             
             // Load all variables
             for (VariableInfo var : variables.values()) {
+                boolean isPrimitive = isPrimitiveType(var.type);
                 source.append("    let mut ").append(var.name)
-                      .append(": ").append(var.type)
-                      .append(" = self.").append(var.name).append(";\n");
+                      .append(": ").append(var.type);
+                // Add ? for non-primitive types
+                if (!isPrimitive) {
+                    source.append("?");
+                }
+                source.append(" = self.").append(var.name).append(";\n");
             }
             
             if (!variables.isEmpty()) {
@@ -578,6 +591,13 @@ public class ReplEngine {
         }
     }
     
+    private boolean isPrimitiveType(String type) {
+        return switch (type) {
+            case "Int", "Long", "Float", "Double", "Bool", "String" -> true;
+            default -> false;
+        };
+    }
+    
     private String getDefaultValue(String type) {
         return switch (type) {
             case "Int" -> "0";
@@ -585,7 +605,7 @@ public class ReplEngine {
             case "Float", "Double" -> "0.0";
             case "Bool" -> "false";
             case "String" -> "\"\"";
-            default -> "0";
+            default -> "none";  // Use 'none' for custom types (Option, Date, etc.)
         };
     }
     
