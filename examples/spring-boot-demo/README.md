@@ -44,8 +44,7 @@ curl -X POST http://localhost:8080/users \
 
 ## Source Layout
 
-- `src/main/firefly/com/example/Application.fly` - Main application with Spring Boot configuration and REST controllers
-- `src/main/firefly/firefly/std/net/net.fly` - Network utilities (optional)
+- `src/main/firefly/com/example/Application.fly` - Main application with Spring Boot configuration, DI, and REST controllers
 
 ## Key Flylang Features Demonstrated
 

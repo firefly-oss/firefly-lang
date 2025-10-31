@@ -3,7 +3,8 @@ module com::example
 use org::springframework::boot::SpringApplication
 use org::springframework::boot::autoconfigure::SpringBootApplication
 use org::springframework::web::bind::annotation::{RestController, GetMapping, PostMapping, RequestParam, PathVariable, RequestBody}
-use java::lang::Class
+use org::springframework::stereotype::Service
+use org::springframework::beans::factory::annotation::Autowired
 
 @SpringBootApplication
 class Application {
@@ -12,14 +13,19 @@ class Application {
     }
 }
 
+@Service
+class GreetingService {
+    pub fn hello() -> String { "Hello from Flylang + Spring Boot" }
+}
+
 @RestController
 class HelloController {
-    @GetMapping("/hello")
-    pub fn hello() -> String {
-        "Hello from Flylang + Spring Boot"
-    }
+    @Autowired
+    priv let service: GreetingService;
 
-    // GET /users/{id}?greet=Name -> returns JSON
+    @GetMapping("/hello")
+    pub fn hello() -> String { self.service::hello() }
+
     @GetMapping("/users/{id}")
     pub fn getUser(
         @PathVariable("id") id: String,
@@ -28,14 +34,12 @@ class HelloController {
         User { id: id, name: greet }
     }
 
-    // POST /users with JSON body -> echoes with suffix
     @PostMapping("/users")
     pub fn createUser(@RequestBody body: User) -> User {
         User { id: body.id, name: body.name + "_created" }
     }
 }
 
-// Struct for JSON (has getters via codegen)
 struct User {
     id: String,
     name: String
