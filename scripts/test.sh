@@ -47,6 +47,11 @@ ALL_EXAMPLES=(
   spring-boot-demo
   enum-demo
   task-manager-cli
+  ranges-demo
+  exceptions-demo
+  std-result-demo
+  std-option-demo
+  std-validation-demo
 )
 
 # Quick smoke test subset (fast examples)
@@ -55,6 +60,10 @@ QUICK_EXAMPLES=(
   async-demo
   patterns-demo
   sparks-demo
+  ranges-demo
+  exceptions-demo
+  std-result-demo
+  std-option-demo
 )
 
 # Maven modules with tests
@@ -199,6 +208,19 @@ run_example() {
       return 0
     else
       print_error "$example endpoints test failed or timed out"
+      return 1
+    fi
+  elif [[ "$example" == "exceptions-demo" ]]; then
+    # Run via Fly CLI to ensure proper main wrapper
+    local run_cmd="fly run \"$example_dir\""
+    if [[ -n "$TIMEOUT_CMD" ]]; then
+      run_cmd="$TIMEOUT_CMD 10s $run_cmd"
+    fi
+    if eval "$run_cmd > /dev/null 2>&1"; then
+      print_success "$example completed"
+      return 0
+    else
+      print_error "$example execution failed or timed out"
       return 1
     fi
   else

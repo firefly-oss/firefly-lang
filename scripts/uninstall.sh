@@ -182,8 +182,16 @@ fi
 
 bold "Uninstalling Flylang - Firefly Programming Language (prefix=${PREFIX})"
 
-# Check permissions
-if [ ! -w "$INSTALL_BIN" ] || [ ! -w "$(dirname "$INSTALL_LIB")" ]; then
+# Check permissions - only if directories/files exist
+NEED_SUDO=0
+if [ -d "$INSTALL_LIB" ] && [ ! -w "$(dirname "$INSTALL_LIB")" ]; then
+  NEED_SUDO=1
+fi
+if [ -f "$LAUNCHER" ] && [ ! -w "$INSTALL_BIN" ]; then
+  NEED_SUDO=1
+fi
+
+if [ "$NEED_SUDO" -eq 1 ]; then
   if command -v sudo >/dev/null 2>&1; then
     info "Requesting elevated privileges..."
     SUDO="sudo"
