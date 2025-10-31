@@ -43,50 +43,64 @@ class DateTime {
     }
     
     pub fn year() -> Int {
-        return self.internal::getYear();
+        let ldt: LocalDateTime = self.internal;
+        return ldt::getYear();
     }
     
     pub fn month() -> Int {
-        return self.internal::getMonthValue();
+        let ldt: LocalDateTime = self.internal;
+        return ldt::getMonthValue();
     }
     
     pub fn day() -> Int {
-        return self.internal::getDayOfMonth();
+        let ldt: LocalDateTime = self.internal;
+        return ldt::getDayOfMonth();
     }
     
     pub fn hour() -> Int {
-        return self.internal::getHour();
+        let ldt: LocalDateTime = self.internal;
+        return ldt::getHour();
     }
     
     pub fn minute() -> Int {
-        return self.internal::getMinute();
+        let ldt: LocalDateTime = self.internal;
+        return ldt::getMinute();
     }
     
     pub fn second() -> Int {
-        return self.internal::getSecond();
+        let ldt: LocalDateTime = self.internal;
+        return ldt::getSecond();
     }
     
     pub fn plusHours(hours: Int) -> DateTime {
-        return new DateTime(self.internal::plusHours(hours));
+        let ldt: LocalDateTime = self.internal;
+        return new DateTime(ldt::plusHours(hours));
     }
     
     pub fn plusMinutes(minutes: Int) -> DateTime {
-        return new DateTime(self.internal::plusMinutes(minutes));
+        let ldt: LocalDateTime = self.internal;
+        return new DateTime(ldt::plusMinutes(minutes));
     }
     
     pub fn plusDays(days: Int) -> DateTime {
-        return new DateTime(self.internal::plusDays(days));
+        let ldt: LocalDateTime = self.internal;
+        return new DateTime(ldt::plusDays(days));
     }
     
     pub fn isBefore(other: DateTime) -> Bool {
-        return self.internal::isBefore(other.internal);
+        let ldt: LocalDateTime = self.internal;
+        let otherLdt: LocalDateTime = other.internal;
+        return ldt::isBefore(otherLdt);
     }
     
     pub fn isAfter(other: DateTime) -> Bool {
-        return self.internal::isAfter(other.internal);
+        let ldt: LocalDateTime = self.internal;
+        let otherLdt: LocalDateTime = other.internal;
+        return ldt::isAfter(otherLdt);
     }
     
     pub fn toString() -> String {
-        return self.internal::toString();
+        let ldt: LocalDateTime = self.internal;
+        return ldt::toString();
     }
 }

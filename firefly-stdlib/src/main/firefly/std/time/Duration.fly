@@ -1,0 +1,102 @@
+/**
+ * Firefly Duration Type
+ * 
+ * Represents a time-based amount of time (seconds, milliseconds, etc.).
+ * This is Firefly's native duration type, internally backed by java.time.Duration
+ * but exposed with Firefly-idiomatic APIs.
+ *
+ * @module firefly::std::time::Duration
+ * @since 1.0.0
+ */
+
+module firefly::std::time
+
+
+
+/**
+ * Duration represents an amount of time measured in seconds and nanoseconds.
+ * 
+ * Examples:
+ * ```firefly
+ * let oneHour = Duration.ofHours(1)
+ * let fiveMinutes = Duration.ofMinutes(5)
+ * let total = oneHour.plus(fiveMinutes)
+ * ```
+ */
+class Duration {
+    priv let internal: java::time::Duration;
+    
+    priv init(dur: java::time::Duration) {
+        self.internal = dur;
+    }
+    
+    pub static fn zero() -> Duration {
+        return new Duration(java::time::Duration::ZERO);
+    }
+    
+    pub static fn ofDays(days: Long) -> Duration {
+        return new Duration(java::time::Duration::ofDays(days));
+    }
+    
+    pub static fn ofHours(hours: Long) -> Duration {
+        return new Duration(java::time::Duration::ofHours(hours));
+    }
+    
+    pub static fn ofMinutes(minutes: Long) -> Duration {
+        return new Duration(java::time::Duration::ofMinutes(minutes));
+    }
+    
+    pub static fn ofSeconds(seconds: Long) -> Duration {
+        return new Duration(java::time::Duration::ofSeconds(seconds));
+    }
+    
+    pub static fn ofMillis(millis: Long) -> Duration {
+        return new Duration(java::time::Duration::ofMillis(millis));
+    }
+    
+    pub static fn parse(text: String) -> Duration {
+        return new Duration(java::time::Duration::parse(text));
+    }
+    
+    pub fn toSeconds() -> Long {
+        let jd: java::time::Duration = self.internal;
+        return jd::getSeconds();
+    }
+    
+    pub fn toMillis() -> Long {
+        let jd: java::time::Duration = self.internal;
+        return jd::toMillis();
+    }
+    
+    pub fn plus(other: Duration) -> Duration {
+        let jd: java::time::Duration = self.internal;
+        let otherJd: java::time::Duration = other.internal;
+        return new Duration(jd::plus(otherJd));
+    }
+    
+    pub fn minus(other: Duration) -> Duration {
+        let jd: java::time::Duration = self.internal;
+        let otherJd: java::time::Duration = other.internal;
+        return new Duration(jd::minus(otherJd));
+    }
+    
+    pub fn multipliedBy(multiplicand: Long) -> Duration {
+        let jd: java::time::Duration = self.internal;
+        return new Duration(jd::multipliedBy(multiplicand));
+    }
+    
+    pub fn isZero() -> Bool {
+        let jd: java::time::Duration = self.internal;
+        return jd::isZero();
+    }
+    
+    pub fn isNegative() -> Bool {
+        let jd: java::time::Duration = self.internal;
+        return jd::isNegative();
+    }
+    
+    pub fn toString() -> String {
+        let jd: java::time::Duration = self.internal;
+        return jd::toString();
+    }
+}

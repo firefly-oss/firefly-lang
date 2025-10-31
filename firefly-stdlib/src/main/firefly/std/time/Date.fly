@@ -58,69 +58,81 @@ class Date {
      * Get the year component
      */
     pub fn year() -> Int {
-        return self.internal::getYear();
+        let ld: LocalDate = self.internal;
+        return ld::getYear();
     }
     
     /**
      * Get the month component (1-12)
      */
     pub fn month() -> Int {
-        return self.internal::getMonthValue();
+        let ld: LocalDate = self.internal;
+        return ld::getMonthValue();
     }
     
     /**
      * Get the day of month (1-31)
      */
     pub fn day() -> Int {
-        return self.internal::getDayOfMonth();
+        let ld: LocalDate = self.internal;
+        return ld::getDayOfMonth();
     }
     
     /**
      * Add days to this date
      */
     pub fn plusDays(days: Int) -> Date {
-        return new Date(self.internal::plusDays(days));
+        let ld: LocalDate = self.internal;
+        return new Date(ld::plusDays(days));
     }
     
     /**
      * Add months to this date
      */
     pub fn plusMonths(months: Int) -> Date {
-        return new Date(self.internal::plusMonths(months));
+        let ld: LocalDate = self.internal;
+        return new Date(ld::plusMonths(months));
     }
     
     /**
      * Add years to this date
      */
     pub fn plusYears(years: Int) -> Date {
-        return new Date(self.internal::plusYears(years));
+        let ld: LocalDate = self.internal;
+        return new Date(ld::plusYears(years));
     }
     
     /**
      * Subtract days from this date
      */
     pub fn minusDays(days: Int) -> Date {
-        return new Date(self.internal::minusDays(days));
+        let ld: LocalDate = self.internal;
+        return new Date(ld::minusDays(days));
     }
     
     /**
      * Check if this date is before another
      */
     pub fn isBefore(other: Date) -> Bool {
-        return self.internal::isBefore(other.internal);
+        let ld: LocalDate = self.internal;
+        let otherLd: LocalDate = other.internal;
+        return ld::isBefore(otherLd);
     }
     
     /**
      * Check if this date is after another
      */
     pub fn isAfter(other: Date) -> Bool {
-        return self.internal::isAfter(other.internal);
+        let ld: LocalDate = self.internal;
+        let otherLd: LocalDate = other.internal;
+        return ld::isAfter(otherLd);
     }
     
     /**
      * Format this date as ISO-8601 string (YYYY-MM-DD)
      */
     pub fn toString() -> String {
-        return self.internal::toString();
+        let ld: LocalDate = self.internal;
+        return ld::toString();
     }
 }
