@@ -95,6 +95,13 @@ This document explains how Flylang is implemented: grammar and AST, semantic ana
 
 1. **Symbol Resolution (TypeResolver)**
    - Resolves `use` imports (Java and Flylang types)
+   - Uses FireflyType registry for native type resolution
+   - Type resolution priority:
+     1. Native Firefly types (FireflyType registry: Int, Float, String, UUID, etc.)
+     2. Explicit imports (`use java::util::ArrayList`)
+     3. Wildcard imports (`use java::util::*`)
+     4. Current module types
+     5. Java lang package (String, Integer, System, etc.)
    - Builds symbol table for classes, functions, fields
    - Validates module paths match directory structure
 
@@ -102,6 +109,7 @@ This document explains how Flylang is implemented: grammar and AST, semantic ana
    - Ensures `let` bindings have correct types
    - Validates function return types match body expressions
    - Checks pattern matching exhaustiveness (basic heuristic)
+   - Type conversions: automatic widening (Int → Float) in mixed expressions
 
 3. **Method Resolution (MethodResolver)**
    - Resolves `Type::method(args)` and `expr::method(args)` calls
@@ -131,6 +139,20 @@ This document explains how Flylang is implemented: grammar and AST, semantic ana
 - `Type::method(args)` → `INVOKESTATIC`
 - `expr::method(args)` → `INVOKEVIRTUAL` (with `CHECKCAST` if needed)
 - Field access `expr.field` → `GETFIELD` / `PUTFIELD`
+
+**Type System:**
+- **FireflyType Registry**: Centralized metadata for all native types
+  - Each type knows its JVM descriptor (e.g., `I` for Int, `D` for Double)
+  - Load opcodes (ILOAD, DLOAD, ALOAD, etc.)
+  - Store opcodes (ISTORE, DSTORE, ASTORE, etc.)
+  - Return opcodes (IRETURN, DRETURN, ARETURN, etc.)
+- **Primitive Bytecode**:
+  - Arithmetic: IADD, DADD, IMUL, DMUL, etc.
+  - Negation: INEG (Int), LNEG (Long), FNEG (Float), DNEG (Double)
+  - Comparisons: IF_ICMPLT, DCMPG + IFLT, etc.
+- **Type Conversions**:
+  - Automatic widening: Int → Long/Float/Double (I2L, I2F, I2D)
+  - Boxing/unboxing for Object contexts
 
 **Expression Compilation:**
 - Blocks: compile statements sequentially; last expression is stack result

@@ -6,6 +6,9 @@ A comprehensive, curated tour of real, runnable Flylang examples. Each project u
 
 ## Table of Contents
 - Hello World
+- Type System Showcase
+- Basic Types Test
+- Float Edge Cases
 - Async Demo
 - Concurrency Demo
 - Futures Combinators
@@ -38,6 +41,113 @@ class Main {
 Expected output:
 ```
 Hello, Flylang!
+```
+
+## Type System Showcase
+- Path: `examples/types-showcase`
+- Run: `fly run examples/types-showcase/src/main/firefly/examples/types_showcase/Main.fly`
+- Shows: All native Firefly types, arithmetic, conversions, mixed operations
+
+Key snippet:
+```fly
+module examples::types_showcase
+
+class Main {
+    pub fn fly(args: [String]) -> Void {
+        // Primitive types
+        let count: Int = 42;
+        let price: Float = 99.99;
+        let active: Bool = true;
+        let name: String = "Firefly";
+        
+        // Arithmetic operations
+        let a: Int = 10;
+        let b: Int = 20;
+        let sum: Int = a + b;
+        let product: Int = a * b;
+        
+        // Type conversions (Int to Float)
+        let intVal: Int = 10;
+        let floatVal: Float = 3.5;
+        let mixed: Float = intVal + floatVal;
+        
+        println("All tests passed!");
+    }
+}
+```
+
+Expected output:
+```
+========================================
+  FIREFLY TYPE SYSTEM SHOWCASE
+========================================
+
+Testing Primitive Types
+-------------------------
+  Int:    42
+  Float:  99.99
+  Bool:   true
+  String: Firefly
+  [OK] All tests passed
+```
+
+## Basic Types Test
+- Path: `examples/basic-types-test.fly`
+- Run: `fly run examples/basic-types-test.fly`
+- Shows: Int, Float, String, UUID, BigDecimal, java.time integration
+
+Key snippet:
+```fly
+use java::util::UUID
+use java::math::BigDecimal
+use java::time::{LocalDate, LocalDateTime, Instant, Duration}
+
+class Main {
+    pub fn fly(args: [String]) -> Void {
+        // UUID generation
+        let id: UUID = UUID::randomUUID();
+        println("UUID: " + id::toString());
+        
+        // BigDecimal for precise decimals
+        let amount: BigDecimal = new BigDecimal("999.99");
+        println("Amount: " + amount::toString());
+        
+        // Java time integration
+        let today: LocalDate = LocalDate::now();
+        let timestamp: Instant = Instant::now();
+        let oneHour: Duration = Duration::ofHours(1);
+        
+        // Mixed type operations
+        let count: Int = 5;
+        let itemPrice: Float = 19.99;
+        let total: Float = count * itemPrice;
+        println("Total: $" + total);
+    }
+}
+```
+
+## Float Edge Cases
+- Path: `examples/float-edge-cases`
+- Run: `fly run examples/float-edge-cases/src/main/firefly/examples/float_tests/Main.fly`
+- Shows: Float comparisons, mixed arithmetic, negative numbers, edge cases
+
+Key snippet:
+```fly
+// Float comparisons
+let x: Float = 10.5;
+let y: Float = 20.3;
+if (x < y) { println("Comparison works"); };
+
+// Mixed Int+Float arithmetic
+let i: Int = 10;
+let f: Float = 3.5;
+let result: Float = i + f;  // Auto-converts Int to Float
+println("10 + 3.5 = " + result);  // 13.5
+
+// Negative numbers with unary minus
+let neg: Float = -15.5;
+let pos: Float = 10.0;
+let sum: Float = neg + pos;  // -5.5
 ```
 
 ## Async Demo

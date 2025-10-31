@@ -27,6 +27,11 @@ Flylang combines **concise, Rust-inspired syntax** with **first-class Java inter
 - [Why Flylang?](#why-flylang)
 - [Quick Start](#quick-start)
 - [Language Highlights](#language-highlights)
+  - [Native Type System](#native-type-system)
+  - [Async/Await](#asyncawait-built-in)
+  - [Pattern Matching](#pattern-matching)
+  - [Sparks](#sparks-smart-records)
+  - [Java Interop](#java-interop-zero-ceremony)
 - [Spring Boot Integration](#spring-boot-integration)
 - [Tooling](#tooling)
 - [Examples](#examples)
@@ -109,6 +114,42 @@ fly run examples/hello-world
 ---
 
 ## Language Highlights
+
+### 🎯 Native Type System
+
+Firefly has a comprehensive native type system with 50+ built-in types that provide clean APIs while compiling efficiently to JVM bytecode.
+
+**Primitives:**
+```fly path=null start=null
+let count: Int = 42
+let price: Float = 99.99
+let name: String = "Firefly"
+let active: Bool = true
+```
+
+**Native Date/Time Types:**
+```fly path=null start=null
+use firefly::std::time::{Date, DateTime, Instant, Duration}
+
+// Clean, idiomatic APIs
+let today: Date = Date.now()
+let tomorrow: Date = today.plusDays(1)
+
+let meeting: DateTime = DateTime.of(2025, 10, 31, 14, 30, 0)
+let later: DateTime = meeting.plusHours(2)
+
+let timestamp: Instant = Instant.now()
+let oneHour: Duration = Duration.ofHours(1)
+```
+
+**Why Native Types?**
+- 🎨 **Idiomatic APIs**: Write `Date.now()` not `LocalDate.now()`
+- 🔧 **Consistent**: All types follow Firefly naming conventions
+- 🚀 **Efficient**: Compiles to optimal JVM bytecode
+- 🔒 **Type-safe**: Full compiler integration
+- 📦 **Future-proof**: Can evolve independently of Java
+
+See [docs/TYPE_SYSTEM.md](docs/TYPE_SYSTEM.md) for complete reference.
 
 ### 🚀 Async/Await (Built-in)
 

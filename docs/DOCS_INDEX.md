@@ -25,6 +25,18 @@ Learn Flylang syntax and semantics:
   - Advanced topics (nested patterns, guards, timeouts)
   - Troubleshooting by module
 
+- **[TYPE_SYSTEM.md](TYPE_SYSTEM.md)** — Native type system:
+  - Primitive types (Int, Float, Bool, String)
+  - Date/Time types (Date, DateTime, Instant, Duration)
+  - Collections, UUID, BigDecimal
+  - Compiler integration and JVM bytecode mapping
+
+- **[MIGRATION_GUIDE.md](MIGRATION_GUIDE.md)** — Migrate from java.time to native types:
+  - Side-by-side examples
+  - Method name mapping
+  - Complete migration checklist
+  - Gradual migration strategy
+
 - **[RECIPES.md](RECIPES.md)** — Copy-paste code snippets for common tasks:
   - HTTP requests, JSON parsing
   - Async patterns, error handling
@@ -120,6 +132,8 @@ Contribute to Flylang development:
 | Understand Flylang's design | [INTRODUCTION.md](INTRODUCTION.md) |
 | Install and run my first program | [GETTING_STARTED.md](GETTING_STARTED.md) |
 | Learn the syntax | [LANGUAGE_GUIDE.md](LANGUAGE_GUIDE.md) |
+| Understand the type system | [TYPE_SYSTEM.md](TYPE_SYSTEM.md) |
+| Migrate from java.time | [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) |
 | Build a REST API | [SPRING_BOOT_GUIDE.md](SPRING_BOOT_GUIDE.md) |
 | See example code | [EXAMPLES.md](EXAMPLES.md) |
 | Copy-paste solutions | [RECIPES.md](RECIPES.md) |
@@ -128,4 +142,4 @@ Contribute to Flylang development:
 
 ---
 
-*Flylang v1.0-Alpha — Documentation last updated: 2025-10-29*
+*Flylang v1.0-Alpha — Documentation last updated: 2025-10-31*

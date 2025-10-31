@@ -41,15 +41,79 @@ class Main {
 
 ## Values, Types, and Bindings
 - Bind with `let name: Type = expr;`
-- Common types: `Int`, `Bool`, `String`, tuples (e.g., `(Int, Int)`), arrays like `[T]` when applicable in examples.
-- Values are immutable by default — create a new value to “update”.
+- Values are immutable by default — create a new value to "update".
 
-Examples:
+### Primitive Types
+Firefly provides native support for all JVM primitive types:
+
+| Type | Description | Example |
+|------|-------------|----------|
+| `Int` | 32-bit integer | `let x: Int = 42` |
+| `Long` | 64-bit integer | `let big: Long = 1000000` |
+| `Float` | 64-bit floating point (double) | `let price: Float = 99.99` |
+| `Double` | Alias for Float | `let d: Double = 3.14` |
+| `Bool` | Boolean value | `let ok: Bool = true` |
+| `String` | Text | `let name: String = "Alice"` |
+| `Char` | Single character | `let c: Char = 'a'` |
+| `Byte` | 8-bit integer | `let b: Byte = 127` |
+| `Short` | 16-bit integer | `let s: Short = 1000` |
+
+### Type Operations
+
+**Arithmetic** (Int, Long, Float, Double):
 ```fly
-let x: Int = 42;
-let ok: Bool = true;
-let who: String = "Alice";
-let pair = (1, 2);
+let sum: Int = 10 + 20        // 30
+let product: Float = 3.14 * 2.0  // 6.28
+let neg: Int = -42              // Unary minus
+```
+
+**Type Conversions** (automatic widening):
+```fly
+let i: Int = 10
+let f: Float = 3.5
+let mixed: Float = i + f  // Int automatically converts to Float
+```
+
+**Comparisons**:
+```fly
+if (x < 100) { println("small") }
+if (price >= 50.0) { println("expensive") }
+```
+
+### Standard Types
+
+**UUID**:
+```fly
+use java::util::UUID
+
+let id: UUID = UUID::randomUUID()
+let parsed: UUID = UUID::fromString("550e8400-e29b-41d4-a716-446655440000")
+```
+
+**BigDecimal** (for precise decimal arithmetic):
+```fly
+use java::math::BigDecimal
+
+let amount: BigDecimal = new BigDecimal("999.99")
+let tax: BigDecimal = new BigDecimal("0.21")
+let total: BigDecimal = amount::multiply(tax)
+```
+
+**Date and Time** (java.time integration):
+```fly
+use java::time::{LocalDate, LocalDateTime, Instant, Duration}
+
+let today: LocalDate = LocalDate::now()
+let timestamp: Instant = Instant::now()
+let oneHour: Duration = Duration::ofHours(1)
+```
+
+Basic examples:
+```fly
+let x: Int = 42
+let ok: Bool = true
+let who: String = "Alice"
+let pair = (1, 2)
 ```
 
 ## Functions, Methods, and Visibility
