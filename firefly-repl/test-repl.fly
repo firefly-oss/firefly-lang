@@ -1,0 +1,71 @@
+// Test file for Firefly REPL
+// This file tests various language constructs and REPL features
+
+// Simple expressions
+1 + 2
+3 * 4
+10 / 2
+"Hello, " + "World!"
+
+// Variable declarations
+let x = 42
+let name = "Firefly"
+let pi = 3.14159
+
+// Using variables
+x + 10
+name
+
+// Function definitions
+fn add(a: Int, b: Int) -> Int {
+    return a + b;
+}
+
+fn greet(name: String) -> String {
+    return "Hello, " + name + "!";
+}
+
+fn factorial(n: Int) -> Int {
+    if (n <= 1) {
+        return 1;
+    } else {
+        return n * factorial(n - 1);
+    }
+}
+
+// Calling functions
+add(5, 3)
+greet("Alice")
+factorial(5)
+
+// More complex expressions
+let result = add(10, 20)
+result * 2
+
+// Multi-line function with complex logic
+fn fibonacci(n: Int) -> Int {
+    if (n <= 1) {
+        return n;
+    }
+    return fibonacci(n - 1) + fibonacci(n - 2);
+}
+
+fibonacci(8)
+
+// Class definition (if supported)
+class Point {
+    x: Int;
+    y: Int;
+    
+    fn new(x: Int, y: Int) -> Point {
+        let p = Point { x: x, y: y };
+        return p;
+    }
+    
+    fn distance() -> Float {
+        return sqrt(this.x * this.x + this.y * this.y);
+    }
+}
+
+// Test completed
+"All tests completed!"

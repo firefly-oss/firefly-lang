@@ -46,7 +46,7 @@ public class ContextPanel {
         List<String> imports = engine.getImports();
         List<ReplEngine.FunctionInfo> functions = engine.getFunctions();
         List<ReplEngine.ClassInfo> classes = engine.getClasses();
-        Map<String, Object> variables = engine.getVariables();
+        Map<String, Object> variables = engine.getVariableValues();
 
         int importCount = imports.size();
         int funcCount = functions.size();

@@ -56,6 +56,7 @@ public class FireflyRepl {
     public FireflyRepl() throws IOException {
         this.engine = new ReplEngine();
         this.ui = new ReplUI();
+        this.ui.setEngine(engine);
         this.contextPanel = new ContextPanel(ui.getTerminal(), engine);
         this.ui.setContextPanel(contextPanel);
         this.commandHandler = new ReplCommand(engine, ui);
@@ -65,47 +66,52 @@ public class FireflyRepl {
      * Displays a detailed error message based on the evaluation result.
      */
     private void displayError(ReplEngine.EvalResult result, String input) {
-        String errorType = getErrorTypeName(result.getErrorType());
         String message = result.getError();
-        Integer line = result.getErrorLine();
-        Integer column = result.getErrorColumn();
-        String suggestion = result.getSuggestion();
-
-        // For syntax errors with location, show code snippet with pointer
-        if (result.getErrorType() == ReplEngine.EvalResult.ErrorType.SYNTAX &&
-            column != null && column >= 0) {
-            ui.printErrorWithCode(errorType, message, input, line, column, suggestion);
+        if (message == null) {
+            message = "Unknown error";
+        }
+        
+        // Check if it's a runtime error with cause
+        if (result.getCause() != null) {
+            ui.printError("Error: " + message);
+            if (System.getenv("DEBUG") != null) {
+                result.getCause().printStackTrace();
+            }
         } else {
-            // For other errors, show detailed error without code snippet
-            ui.printDetailedError(errorType, message, line, column, suggestion);
+            ui.printError(message);
         }
     }
 
     /**
-     * Gets a human-readable name for the error type.
+     * Load startup script from ~/.firefly_repl.fly if it exists.
      */
-    private String getErrorTypeName(ReplEngine.EvalResult.ErrorType errorType) {
-        if (errorType == null) return "Unknown";
-
-        switch (errorType) {
-            case SYNTAX:
-                return "Syntax";
-            case SEMANTIC:
-                return "Semantic";
-            case RUNTIME:
-                return "Runtime";
-            case COMPILATION:
-                return "Compilation";
-            default:
-                return "Unknown";
+    private void loadStartupScript() {
+        try {
+            String home = System.getProperty("user.home");
+            java.nio.file.Path scriptPath = java.nio.file.Paths.get(home, ".firefly_repl.fly");
+            
+            if (java.nio.file.Files.exists(scriptPath)) {
+                String content = java.nio.file.Files.readString(scriptPath);
+                ui.printInfo("Loading startup script: " + scriptPath);
+                
+                // Execute the startup script silently
+                for (String line : content.split("\n")) {
+                    if (!line.trim().isEmpty() && !line.trim().startsWith("//")) {
+                        engine.eval(line);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            ui.printWarning("Failed to load startup script: " + e.getMessage());
         }
     }
-
+    
     /**
      * Starts the REPL loop.
      */
     public void run() {
         ui.printBanner();
+        loadStartupScript();
         
         while (true) {
             try {
@@ -137,16 +143,16 @@ public class FireflyRepl {
                 ReplEngine.EvalResult result = engine.eval(input);
 
                 if (result.isSuccess()) {
-                    if (result.getValue() != null) {
-                        // Check if it's a definition confirmation
-                        if ("Definition".equals(result.getType())) {
-                            ui.printDefinitionConfirmation(result.getValue().toString());
-                        } else {
-                            ui.printResult(result.getValue(), result.getType());
+                    // Success - value already printed by engine if needed
+                    // Just show definition confirmation if it's a definition
+                    if (result.getValue() instanceof String) {
+                        String value = (String) result.getValue();
+                        if (value.endsWith(" added") || value.endsWith(" defined")) {
+                            // It's a definition confirmation, show it quietly
                         }
                     }
                 } else {
-                    // Display detailed error information
+                    // Display error
                     displayError(result, input);
                 }
                 

@@ -1,13 +1,14 @@
 package com.firefly.repl;
 
+import com.firefly.compiler.FireflyCompiler;
 import com.firefly.compiler.FireflyLexer;
 import com.firefly.compiler.FireflyParser;
-import com.firefly.compiler.ast.AstBuilder;
-import com.firefly.compiler.ast.AstNode;
-import com.firefly.compiler.ast.CompilationUnit;
+import com.firefly.compiler.ast.*;
+import com.firefly.compiler.ast.decl.*;
+import com.firefly.compiler.ast.expr.*;
 import com.firefly.compiler.codegen.BytecodeGenerator;
 import com.firefly.compiler.codegen.TypeResolver;
-import com.firefly.compiler.semantic.SemanticException;
+import com.firefly.compiler.diagnostic.DiagnosticReporter;
 import com.firefly.compiler.semantics.SemanticAnalyzer;
 import org.antlr.v4.runtime.*;
 import org.antlr.v4.runtime.tree.ParseTree;
@@ -17,45 +18,88 @@ import java.lang.reflect.Method;
 import java.util.*;
 
 /**
- * Core REPL engine for Firefly language.
+ * Robust REPL engine with proper incremental compilation.
  * 
- * <p>Handles compilation and execution of Firefly code snippets in an interactive environment.
- * Maintains state between evaluations and provides a seamless REPL experience.</p>
- * 
- * <h2>Features</h2>
- * <ul>
- *   <li>Incremental compilation of code snippets</li>
- *   <li>Dynamic class loading and execution</li>
- *   <li>State preservation between evaluations</li>
- *   <li>Expression evaluation with result display</li>
- *   <li>Variable and function definitions</li>
- *   <li>Import management</li>
- * </ul>
- * 
- * @version 1.0-Alpha
+ * Architecture:
+ * - Maintains full session state (variables, functions, imports)
+ * - Each evaluation generates a complete, valid Firefly program
+ * - Uses real parser/compiler, no string hacking
+ * - Proper variable persistence across evaluations
  */
 public class ReplEngine {
     
-    private final TypeResolver typeResolver;
-    private final Map<String, Object> variables;
+    // Session state
     private final List<String> imports;
-    private final List<String> definitions;
-    private final List<FunctionInfo> functions;
-    private final List<ClassInfo> classes;
+    private final Map<String, VariableInfo> variables;  // name -> info
+    private final List<String> topLevelDecls;  // classes, functions, etc.
+    private final TypeResolver typeResolver;
     private final ReplClassLoader classLoader;
-    private int snippetCounter;
+    
+    // Execution state
+    private Object currentInstance;
+    private int evalCounter = 0;
     
     /**
-     * Custom class loader for dynamically loading compiled REPL code.
+     * Variable metadata.
+     */
+    public static class VariableInfo {
+        final String name;
+        final String type;
+        final boolean mutable;
+        Object value;  // Current value
+        
+        VariableInfo(String name, String type, boolean mutable) {
+            this.name = name;
+            this.type = type;
+            this.mutable = mutable;
+        }
+    }
+    
+    /**
+     * Evaluation result.
+     */
+    public static class EvalResult {
+        final boolean success;
+        final Object value;
+        final String error;
+        final Throwable cause;
+        
+        private EvalResult(boolean success, Object value, String error, Throwable cause) {
+            this.success = success;
+            this.value = value;
+            this.error = error;
+            this.cause = cause;
+        }
+        
+        public static EvalResult success(Object value) {
+            return new EvalResult(true, value, null, null);
+        }
+        
+        public static EvalResult error(String error) {
+            return new EvalResult(false, null, error, null);
+        }
+        
+        public static EvalResult error(String error, Throwable cause) {
+            return new EvalResult(false, null, error, cause);
+        }
+        
+        public boolean isSuccess() { return success; }
+        public Object getValue() { return value; }
+        public String getError() { return error; }
+        public Throwable getCause() { return cause; }
+    }
+    
+    /**
+     * Custom classloader for REPL-generated classes.
      */
     private static class ReplClassLoader extends ClassLoader {
         private final Map<String, byte[]> classBytes = new HashMap<>();
         
-        public ReplClassLoader() {
+        ReplClassLoader() {
             super(ReplClassLoader.class.getClassLoader());
         }
         
-        public void defineClass(String name, byte[] bytes) {
+        void defineClass(String name, byte[]bytes) {
             classBytes.put(name, bytes);
         }
         
@@ -69,679 +113,632 @@ public class ReplEngine {
         }
     }
     
+    public ReplEngine() {
+        this.imports = new ArrayList<>();
+        this.variables = new LinkedHashMap<>();  // Preserve order
+        this.topLevelDecls = new ArrayList<>();
+        this.typeResolver = new TypeResolver();
+        this.classLoader = new ReplClassLoader();
+        
+        // Add default imports
+        imports.add("use firefly::std::io::{println, print}");
+    }
+    
     /**
-     * Information about a defined function.
+     * Evaluate a line of input.
      */
+    public EvalResult eval(String input) {
+        if (input == null || input.trim().isEmpty()) {
+            return EvalResult.success(null);
+        }
+        
+        String trimmed = input.trim();
+        
+        // Handle comments
+        if (trimmed.startsWith("//") || trimmed.startsWith("/*")) {
+            return EvalResult.success(null);
+        }
+        
+        try {
+            return evalInternal(trimmed);
+        } catch (Exception e) {
+            return EvalResult.error("Error: " + e.getMessage(), e);
+        }
+    }
+    
+    private EvalResult evalInternal(String input) {
+        evalCounter++;
+        
+        // Try to parse as different constructs
+        ParseResult parseResult = parseInput(input);
+        
+        if (!parseResult.success) {
+            return EvalResult.error(parseResult.error);
+        }
+        
+        // Handle based on what we parsed
+        switch (parseResult.type) {
+            case IMPORT:
+                handleImport(input);
+                return EvalResult.success("Import added");
+                
+            case TOP_LEVEL_DECL:
+                handleTopLevelDecl(input);
+                return EvalResult.success("Declaration added");
+                
+            case LET_STATEMENT:
+                return handleLetStatement(parseResult);
+                
+            case ASSIGNMENT:
+                return handleAssignment(parseResult);
+                
+            case EXPRESSION:
+                return handleExpression(parseResult);
+                
+            case STATEMENT:
+                return handleStatement(parseResult);
+                
+            default:
+                return EvalResult.error("Unknown input type");
+        }
+    }
+    
+    /**
+     * Parse input to determine what it is.
+     */
+    private ParseResult parseInput(String input) {
+        // Quick checks first
+        if (input.startsWith("use ")) {
+            return ParseResult.success(InputType.IMPORT, input);
+        }
+        
+        if (input.startsWith("class ") || input.startsWith("struct ") || 
+            input.startsWith("data ") || input.startsWith("spark ") ||
+            input.startsWith("fn ")) {
+            return ParseResult.success(InputType.TOP_LEVEL_DECL, input);
+        }
+        
+        // Parse as statement/expression
+        try {
+            // Wrap in minimal valid program to parse
+            String wrapped = "module repl\n\nclass Main {\n  pub fn snippet() -> Void {\n    " + 
+                           input + (input.endsWith(";") ? "" : ";") + "\n  }\n  pub fn fly(args: [String]) -> Void {}\n}\n";
+            
+            CharStream chars = CharStreams.fromString(wrapped);
+            FireflyLexer lexer = new FireflyLexer(chars);
+            CommonTokenStream tokens = new CommonTokenStream(lexer);
+            FireflyParser parser = new FireflyParser(tokens);
+            
+            // Disable error reporting to stderr
+            parser.removeErrorListeners();
+            lexer.removeErrorListeners();
+            
+            ParseTree tree = parser.compilationUnit();
+            
+            // Build AST
+            AstBuilder astBuilder = new AstBuilder("<repl>");
+            AstNode ast = astBuilder.visit(tree);
+            
+            if (!(ast instanceof CompilationUnit)) {
+                return ParseResult.error("Failed to parse");
+            }
+            
+            CompilationUnit cu = (CompilationUnit) ast;
+            
+            // Extract the statement from Main.snippet
+            for (Declaration decl : cu.getDeclarations()) {
+                if (decl instanceof ClassDecl) {
+                    ClassDecl classDecl = (ClassDecl) decl;
+                    for (ClassDecl.MethodDecl method : classDecl.getMethods()) {
+                        if ("snippet".equals(method.getName())) {
+                            if (method.getBody() instanceof BlockExpr) {
+                                BlockExpr block = (BlockExpr) method.getBody();
+                                if (!block.getStatements().isEmpty()) {
+                                    Statement stmt = block.getStatements().get(0);
+                                    return classifyStatement(stmt, input);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return ParseResult.error("Could not extract statement");
+            
+        } catch (Exception e) {
+            return ParseResult.error("Parse error: " + e.getMessage());
+        }
+    }
+    
+    private ParseResult classifyStatement(Statement stmt, String originalInput) {
+        if (stmt instanceof LetStatement) {
+            LetStatement letStmt = (LetStatement) stmt;
+            return ParseResult.letStatement(originalInput, letStmt);
+        }
+        
+        if (stmt instanceof ExprStatement) {
+            ExprStatement exprStmt = (ExprStatement) stmt;
+            Expression expr = exprStmt.getExpression();
+            
+            if (expr instanceof AssignmentExpr) {
+                return ParseResult.assignment(originalInput, (AssignmentExpr) expr);
+            }
+            
+            // Detect side-effect functions (println, print, etc.) - treat as statements
+            if (expr instanceof CallExpr) {
+                CallExpr call = (CallExpr) expr;
+                Expression function = call.getFunction();
+                if (function instanceof IdentifierExpr) {
+                    String funcName = ((IdentifierExpr) function).getName();
+                    if ("println".equals(funcName) || "print".equals(funcName)) {
+                        return ParseResult.success(InputType.STATEMENT, originalInput);
+                    }
+                }
+            }
+            
+            // Other expressions - treat as expressions
+            return ParseResult.expression(originalInput, expr);
+        }
+        
+        return ParseResult.success(InputType.STATEMENT, originalInput);
+    }
+    
+    private void handleImport(String input) {
+        if (!imports.contains(input)) {
+            imports.add(input);
+        }
+    }
+    
+    private void handleTopLevelDecl(String input) {
+        if (!topLevelDecls.contains(input)) {
+            topLevelDecls.add(input);
+        }
+    }
+    
+    private EvalResult handleLetStatement(ParseResult result) {
+        LetStatement letStmt = result.letStatement;
+        String input = result.input;
+        
+        // Extract variable info
+        Pattern pattern = letStmt.getPattern();
+        String varName = null;
+        String varType = "Object";
+        
+        if (pattern instanceof com.firefly.compiler.ast.pattern.TypedVariablePattern) {
+            var tvp = (com.firefly.compiler.ast.pattern.TypedVariablePattern) pattern;
+            varName = tvp.getName();
+            varType = tvp.getType().getName();
+        } else if (pattern instanceof com.firefly.compiler.ast.pattern.VariablePattern) {
+            var vp = (com.firefly.compiler.ast.pattern.VariablePattern) pattern;
+            varName = vp.getName();
+        }
+        
+        if (varName == null) {
+            return EvalResult.error("Could not extract variable name");
+        }
+        
+        boolean mutable = letStmt.isMutable();
+        
+        // Register variable
+        variables.put(varName, new VariableInfo(varName, varType, mutable));
+        
+        // Extract initialization value from input
+        String initValue = extractInitValue(input);
+        
+        // Compile and execute to get the value
+        return executeWithVariables(varName + " = " + initValue + ";", true);
+    }
+    
+    private String extractInitValue(String input) {
+        int eqPos = input.indexOf('=');
+        if (eqPos > 0) {
+            String value = input.substring(eqPos + 1).trim();
+            if (value.endsWith(";")) {
+                value = value.substring(0, value.length() - 1).trim();
+            }
+            return value;
+        }
+        return "0";  // default
+    }
+    
+    private EvalResult handleAssignment(ParseResult result) {
+        AssignmentExpr assignment = result.assignment;
+        String input = result.input;
+        
+        // Extract variable name
+        Expression target = assignment.getTarget();
+        String varName = null;
+        if (target instanceof IdentifierExpr) {
+            varName = ((IdentifierExpr) target).getName();
+        }
+        
+        if (varName == null || !variables.containsKey(varName)) {
+            return EvalResult.error("Variable not found: " + varName);
+        }
+        
+        VariableInfo varInfo = variables.get(varName);
+        if (!varInfo.mutable) {
+            return EvalResult.error("Cannot assign to immutable variable: " + varName);
+        }
+        
+        // Execute assignment
+        String stmt = input.endsWith(";") ? input : input + ";";
+        return executeWithVariables(stmt, true);
+    }
+    
+    private EvalResult handleExpression(ParseResult result) {
+        String input = result.input;
+        // For expressions, DON'T add semicolon - it should be the return value
+        String code = input.endsWith(";") ? input.substring(0, input.length() - 1) : input;
+        return executeWithVariables(code, false);
+    }
+    
+    private EvalResult handleStatement(ParseResult result) {
+        String input = result.input;
+        String stmt = input.endsWith(";") ? input : input + ";";
+        return executeWithVariables(stmt, true);
+    }
+    
+    /**
+     * Execute code with all current variables in scope.
+     */
+    private EvalResult executeWithVariables(String code, boolean returnsVoid) {
+        try {
+            // Build complete program
+            String moduleName = "repl" + evalCounter;
+            String methodName = "eval" + evalCounter;
+            
+            StringBuilder source = new StringBuilder();
+            source.append("module ").append(moduleName).append("\n\n");
+            
+            // Add imports
+            for (String imp : imports) {
+                source.append(imp).append("\n");
+            }
+            source.append("\n");
+            
+            // Add top-level declarations
+            for (String decl : topLevelDecls) {
+                source.append(decl).append("\n\n");
+            }
+            
+            // Build Main class with all variables as fields
+            source.append("class Main {\n");
+            
+            // Declare all variables as fields
+            for (VariableInfo var : variables.values()) {
+                source.append("  pub let mut ").append(var.name)
+                      .append(": ").append(var.type).append(";\n");
+            }
+            
+            if (!variables.isEmpty()) {
+                source.append("\n");
+            }
+            
+            // Constructor
+            if (!variables.isEmpty()) {
+                source.append("  pub init() {\n");
+                for (VariableInfo var : variables.values()) {
+                    String defaultValue = getDefaultValue(var.type);
+                    source.append("    self.").append(var.name)
+                          .append(" = ").append(defaultValue).append(";\n");
+                }
+                source.append("  }\n\n");
+            }
+            
+            // Evaluation method
+            String returnType = returnsVoid ? "Void" : "Object";
+            source.append("  pub fn ").append(methodName)
+                  .append("() -> ").append(returnType).append(" {\n");
+            
+            // Load all variables
+            for (VariableInfo var : variables.values()) {
+                source.append("    let mut ").append(var.name)
+                      .append(": ").append(var.type)
+                      .append(" = self.").append(var.name).append(";\n");
+            }
+            
+            if (!variables.isEmpty()) {
+                source.append("\n");
+            }
+            
+            // Execute user code
+            if (returnsVoid) {
+                // For statements, add semicolon
+                source.append("    ").append(code);
+                if (!code.endsWith(";")) {
+                    source.append(";");
+                }
+                source.append("\n");
+            } else {
+                // For expressions, save variables BEFORE the expression
+                // and make expression the final return value
+                if (!variables.isEmpty()) {
+                    for (VariableInfo var : variables.values()) {
+                        source.append("    self.").append(var.name)
+                              .append(" = ").append(var.name).append(";\n");
+                    }
+                    source.append("\n");
+                }
+                // Final expression without semicolon (return value)
+                source.append("    ").append(code).append("\n");
+            }
+            
+            // Save variables for statements only (expressions handled above)
+            if (returnsVoid && !variables.isEmpty()) {
+                source.append("\n");
+                for (VariableInfo var : variables.values()) {
+                    source.append("    self.").append(var.name)
+                          .append(" = ").append(var.name).append(";\n");
+                }
+            }
+            
+            source.append("  }\n\n");
+            
+            // fly method
+            source.append("  pub fn fly(args: [String]) -> Void {\n");
+            source.append("    self::").append(methodName).append("();\n");
+            source.append("  }\n");
+            
+            source.append("}\n");
+            
+            String sourceCode = source.toString();
+            
+            if (System.getenv("REPL_DEBUG") != null) {
+                System.err.println("\n=== GENERATED ===");
+                System.err.println(sourceCode);
+                System.err.println("=== END ===\n");
+            }
+            
+            // Compile
+            CharStream chars = CharStreams.fromString(sourceCode);
+            FireflyLexer lexer = new FireflyLexer(chars);
+            CommonTokenStream tokens = new CommonTokenStream(lexer);
+            FireflyParser parser = new FireflyParser(tokens);
+            
+            ParseTree tree = parser.compilationUnit();
+            AstBuilder astBuilder = new AstBuilder("<repl>");
+            AstNode ast = astBuilder.visit(tree);
+            
+            if (!(ast instanceof CompilationUnit)) {
+                return EvalResult.error("Failed to build AST");
+            }
+            
+            CompilationUnit cu = (CompilationUnit) ast;
+            
+            // Semantic analysis
+            SemanticAnalyzer analyzer = new SemanticAnalyzer(typeResolver);
+            analyzer.analyze(cu);
+            
+            // Generate bytecode
+            BytecodeGenerator generator = new BytecodeGenerator(typeResolver);
+            Map<String, byte[]> classes = generator.generate(cu);
+            
+            // Load classes
+            String mainClassName = null;
+            for (Map.Entry<String, byte[]> entry : classes.entrySet()) {
+                String className = entry.getKey().replace('/', '.');
+                classLoader.defineClass(className, entry.getValue());
+                if (entry.getKey().endsWith("/Main")) {
+                    mainClassName = className;
+                }
+            }
+            
+            if (mainClassName == null) {
+                return EvalResult.error("Main class not found");
+            }
+            
+            // Execute
+            Class<?> mainClass = classLoader.loadClass(mainClassName);
+            
+            // Always create new instance (different class each time)
+            currentInstance = mainClass.getDeclaredConstructor().newInstance();
+            
+            // Restore variable values from previous evaluation
+            for (VariableInfo var : variables.values()) {
+                try {
+                    var field = mainClass.getDeclaredField(var.name);
+                    field.setAccessible(true);
+                    // Set from saved value, or default if null
+                    if (var.value != null) {
+                        field.set(currentInstance, var.value);
+                    }
+                } catch (Exception e) {
+                    // Ignore
+                }
+            }
+            
+            // Call eval method
+            Method evalMethod = mainClass.getMethod(methodName);
+            Object result = evalMethod.invoke(currentInstance);
+            
+            // Save variable values for next evaluation
+            for (VariableInfo var : variables.values()) {
+                try {
+                    var field = mainClass.getDeclaredField(var.name);
+                    field.setAccessible(true);
+                    var.value = field.get(currentInstance);
+                } catch (Exception e) {
+                    // Ignore
+                }
+            }
+            
+            // Print non-void results
+            if (!returnsVoid && result != null) {
+                System.out.println(result);
+            }
+            
+            return EvalResult.success(result);
+            
+        } catch (InvocationTargetException e) {
+            Throwable cause = e.getCause();
+            return EvalResult.error(cause != null ? cause.getMessage() : "Execution error", cause);
+        } catch (Exception e) {
+            return EvalResult.error(e.getMessage(), e);
+        }
+    }
+    
+    private String getDefaultValue(String type) {
+        return switch (type) {
+            case "Int" -> "0";
+            case "Long" -> "0";
+            case "Float", "Double" -> "0.0";
+            case "Bool" -> "false";
+            case "String" -> "\"\"";
+            default -> "0";
+        };
+    }
+    
+    public void reset() {
+        imports.clear();
+        variables.clear();
+        topLevelDecls.clear();
+        currentInstance = null;
+        evalCounter = 0;
+        
+        // Re-add defaults
+        imports.add("use firefly::std::io::{println, print}");
+    }
+    
+    public Map<String, VariableInfo> getVariables() {
+        return new LinkedHashMap<>(variables);
+    }
+    
+    public Map<String, Object> getVariableValues() {
+        // For UI compatibility - return map of name -> value
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (Map.Entry<String, VariableInfo> entry : variables.entrySet()) {
+            result.put(entry.getKey(), entry.getValue().value);
+        }
+        return result;
+    }
+    
+    public List<String> getImports() {
+        return new ArrayList<>(imports);
+    }
+    
+    public List<String> getDefinitions() {
+        return new ArrayList<>(topLevelDecls);
+    }
+    
+    public List<FunctionInfo> getFunctions() {
+        // Extract functions from topLevelDecls
+        List<FunctionInfo> result = new ArrayList<>();
+        for (String decl : topLevelDecls) {
+            if (decl.trim().startsWith("fn ")) {
+                // Extract function name
+                String trimmed = decl.trim().substring(3).trim();
+                int parenPos = trimmed.indexOf('(');
+                if (parenPos > 0) {
+                    String name = trimmed.substring(0, parenPos).trim();
+                    result.add(new FunctionInfo(name, name + "(...)", "Unknown"));
+                }
+            }
+        }
+        return result;
+    }
+    
+    public List<ClassInfo> getClasses() {
+        // Extract classes from topLevelDecls
+        List<ClassInfo> result = new ArrayList<>();
+        for (String decl : topLevelDecls) {
+            if (decl.trim().startsWith("class ")) {
+                String trimmed = decl.trim().substring(6).trim();
+                int spacePos = trimmed.indexOf(' ');
+                int bracePos = trimmed.indexOf('{');
+                int endPos = spacePos > 0 && spacePos < bracePos ? spacePos : bracePos;
+                if (endPos > 0) {
+                    String name = trimmed.substring(0, endPos).trim();
+                    result.add(new ClassInfo(name));
+                }
+            }
+        }
+        return result;
+    }
+    
+    public String inferTypeOf(String expression) {
+        // Simple type inference - just evaluate and get type
+        try {
+            EvalResult result = eval(expression);
+            if (result.isSuccess() && result.getValue() != null) {
+                return result.getValue().getClass().getSimpleName();
+            }
+        } catch (Exception e) {
+            // Ignore
+        }
+        return "Unknown";
+    }
+    
+    // Helper classes and nested types for UI compatibility
+    
     public static class FunctionInfo {
         private final String name;
         private final String signature;
         private final String returnType;
-
+        
         public FunctionInfo(String name, String signature, String returnType) {
             this.name = name;
             this.signature = signature;
             this.returnType = returnType;
         }
-
+        
         public String getName() { return name; }
         public String getSignature() { return signature; }
         public String getReturnType() { return returnType; }
     }
-
-    /**
-     * Information about a defined class.
-     */
+    
     public static class ClassInfo {
         private final String name;
-
+        
         public ClassInfo(String name) {
             this.name = name;
         }
-
+        
         public String getName() { return name; }
     }
-
-    /**
-     * Result of evaluating a REPL input.
-     */
-    public static class EvalResult {
-        private final boolean success;
-        private final Object value;
-        private final String type;
-        private final String error;
-        private final ErrorType errorType;
-        private final Integer errorLine;
-        private final Integer errorColumn;
-        private final String suggestion;
-
-        public enum ErrorType {
-            SYNTAX,      // Parse/syntax errors
-            SEMANTIC,    // Type errors, undefined variables, etc.
-            RUNTIME,     // Runtime exceptions
-            COMPILATION  // Bytecode generation errors
-        }
-
-        private EvalResult(boolean success, Object value, String type, String error,
-                          ErrorType errorType, Integer errorLine, Integer errorColumn, String suggestion) {
+    
+    private enum InputType {
+        IMPORT, TOP_LEVEL_DECL, LET_STATEMENT, ASSIGNMENT, EXPRESSION, STATEMENT
+    }
+    
+    private static class ParseResult {
+        final boolean success;
+        final InputType type;
+        final String input;
+        final String error;
+        final LetStatement letStatement;
+        final AssignmentExpr assignment;
+        final Expression expression;
+        
+        private ParseResult(boolean success, InputType type, String input, String error,
+                           LetStatement letStatement, AssignmentExpr assignment, Expression expression) {
             this.success = success;
-            this.value = value;
             this.type = type;
+            this.input = input;
             this.error = error;
-            this.errorType = errorType;
-            this.errorLine = errorLine;
-            this.errorColumn = errorColumn;
-            this.suggestion = suggestion;
+            this.letStatement = letStatement;
+            this.assignment = assignment;
+            this.expression = expression;
         }
-
-        public static EvalResult success(Object value, String type) {
-            return new EvalResult(true, value, type, null, null, null, null, null);
+        
+        static ParseResult success(InputType type, String input) {
+            return new ParseResult(true, type, input, null, null, null, null);
         }
-
-        public static EvalResult error(String error, ErrorType errorType) {
-            return new EvalResult(false, null, null, error, errorType, null, null, null);
+        
+        static ParseResult letStatement(String input, LetStatement stmt) {
+            return new ParseResult(true, InputType.LET_STATEMENT, input, null, stmt, null, null);
         }
-
-        public static EvalResult error(String error, ErrorType errorType, int line, int column, String suggestion) {
-            return new EvalResult(false, null, null, error, errorType, line, column, suggestion);
+        
+        static ParseResult assignment(String input, AssignmentExpr expr) {
+            return new ParseResult(true, InputType.ASSIGNMENT, input, null, null, expr, null);
         }
-
-        public boolean isSuccess() {
-            return success;
+        
+        static ParseResult expression(String input, Expression expr) {
+            return new ParseResult(true, InputType.EXPRESSION, input, null, null, null, expr);
         }
-
-        public Object getValue() {
-            return value;
+        
+        static ParseResult error(String error) {
+            return new ParseResult(false, null, null, error, null, null, null);
         }
-
-        public String getType() {
-            return type;
-        }
-
-        public String getError() {
-            return error;
-        }
-
-        public ErrorType getErrorType() {
-            return errorType;
-        }
-
-        public Integer getErrorLine() {
-            return errorLine;
-        }
-
-        public Integer getErrorColumn() {
-            return errorColumn;
-        }
-
-        public String getSuggestion() {
-            return suggestion;
-        }
-    }
-    
-    /**
-     * Creates a new REPL engine.
-     */
-    public ReplEngine() {
-        this.typeResolver = new TypeResolver();
-        this.variables = new HashMap<>();
-        this.imports = new ArrayList<>();
-        this.definitions = new ArrayList<>();
-        this.functions = new ArrayList<>();
-        this.classes = new ArrayList<>();
-        this.classLoader = new ReplClassLoader();
-        this.snippetCounter = 0;
-
-        // Add default imports
-        addDefaultImports();
-    }
-
-    /**
-     * Gets the list of imports.
-     */
-    public List<String> getImports() {
-        return new ArrayList<>(imports);
-    }
-
-    /**
-     * Gets the list of defined functions.
-     */
-    public List<FunctionInfo> getFunctions() {
-        return new ArrayList<>(functions);
-    }
-
-    /**
-     * Gets the list of defined classes.
-     */
-    public List<ClassInfo> getClasses() {
-        return new ArrayList<>(classes);
-    }
-
-    /**
-     * Gets the map of variables.
-     */
-    public Map<String, Object> getVariables() {
-        return new HashMap<>(variables);
-    }
-    
-    /**
-     * Adds default imports that are always available in the REPL.
-     */
-    private void addDefaultImports() {
-        imports.add("use firefly::std::option::*");
-        imports.add("use firefly::std::result::*");
-        imports.add("use firefly::std::collections::*");
-    }
-    
-    /**
-     * Evaluates a line of Firefly code.
-     *
-     * @param input The Firefly code to evaluate
-     * @return The result of evaluation
-     */
-    public EvalResult eval(String input) {
-        if (input == null || input.trim().isEmpty()) {
-            return EvalResult.success(null, "Void");
-        }
-
-        // Ignore comments
-        String trimmed = input.trim();
-        if (trimmed.startsWith("//") || trimmed.startsWith("/*")) {
-            return EvalResult.success(null, "Void");
-        }
-
-        try {
-            // Evaluate the input (handles definitions, expressions, and statements)
-            return evalExpression(input);
-
-        } catch (Exception e) {
-            return handleException(e, input);
-        }
-    }
-
-    /**
-     * Handles exceptions and creates detailed error results.
-     */
-    private EvalResult handleException(Exception e, String input) {
-        // Syntax errors from ANTLR
-        if (e instanceof RecognitionException) {
-            RecognitionException re = (RecognitionException) e;
-            Token token = re.getOffendingToken();
-            int line = token != null ? token.getLine() : 0;
-            int column = token != null ? token.getCharPositionInLine() : 0;
-
-            String message = "Syntax error";
-            String suggestion = getSyntaxSuggestion(e.getMessage(), token);
-
-            if (token != null) {
-                message = "Unexpected token '" + token.getText() + "'";
-            }
-
-            return EvalResult.error(message, EvalResult.ErrorType.SYNTAX, line, column, suggestion);
-        }
-
-        // Semantic errors
-        if (e instanceof SemanticException) {
-            SemanticException se = (SemanticException) e;
-            String message = se.getMessage();
-            String suggestion = getSemanticSuggestion(message);
-
-            return EvalResult.error(message, EvalResult.ErrorType.SEMANTIC, 0, 0, suggestion);
-        }
-
-        // Runtime errors
-        if (e instanceof InvocationTargetException) {
-            Throwable cause = e.getCause();
-            String message = cause != null ? cause.getClass().getSimpleName() : "Runtime error";
-            String detail = cause != null && cause.getMessage() != null ? cause.getMessage() : "";
-
-            if (!detail.isEmpty()) {
-                message += ": " + detail;
-            }
-
-            String suggestion = getRuntimeSuggestion(cause);
-            return EvalResult.error(message, EvalResult.ErrorType.RUNTIME, 0, 0, suggestion);
-        }
-
-        // Generic compilation errors
-        String message = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-        String suggestion = getGenericSuggestion(message, input);
-
-        return EvalResult.error(message, EvalResult.ErrorType.COMPILATION, 0, 0, suggestion);
-    }
-
-    /**
-     * Provides helpful suggestions for syntax errors.
-     */
-    private String getSyntaxSuggestion(String errorMsg, Token token) {
-        if (errorMsg == null) return null;
-
-        String msg = errorMsg.toLowerCase();
-
-        if (msg.contains("missing '}'")) {
-            return "Did you forget to close a code block with '}'?";
-        }
-        if (msg.contains("missing ')'")) {
-            return "Did you forget to close a parenthesis with ')'?";
-        }
-        if (msg.contains("missing ';'")) {
-            return "Try adding a semicolon ';' at the end of the statement";
-        }
-        if (msg.contains("extraneous input")) {
-            return "There seems to be unexpected syntax. Check for typos or missing operators";
-        }
-        if (token != null && token.getText().equals("=")) {
-            return "Use 'let' or 'mut' to declare variables: 'let x = 42'";
-        }
-
-        return "Check the Firefly syntax documentation for correct usage";
-    }
-
-    /**
-     * Provides helpful suggestions for semantic errors.
-     */
-    private String getSemanticSuggestion(String errorMsg) {
-        if (errorMsg == null) return null;
-
-        String msg = errorMsg.toLowerCase();
-
-        if (msg.contains("undefined") || msg.contains("not found")) {
-            return "Make sure the variable or function is defined before using it";
-        }
-        if (msg.contains("type mismatch") || msg.contains("incompatible types")) {
-            return "Check that the types match. You may need to cast or convert the value";
-        }
-        if (msg.contains("cannot assign")) {
-            return "Variables declared with 'let' are immutable. Use 'mut' for mutable variables";
-        }
-        if (msg.contains("duplicate")) {
-            return "A variable or function with this name already exists";
-        }
-
-        return "Review the type system and variable scoping rules";
-    }
-
-    /**
-     * Provides helpful suggestions for runtime errors.
-     */
-    private String getRuntimeSuggestion(Throwable cause) {
-        if (cause == null) return null;
-
-        String className = cause.getClass().getSimpleName();
-
-        if (className.contains("NullPointer")) {
-            return "A value is null when it shouldn't be. Check for null values before using them";
-        }
-        if (className.contains("ArrayIndexOutOfBounds") || className.contains("IndexOutOfBounds")) {
-            return "Array or list index is out of range. Check your indices";
-        }
-        if (className.contains("ClassCast")) {
-            return "Invalid type conversion. Make sure the types are compatible";
-        }
-        if (className.contains("ArithmeticException")) {
-            return "Arithmetic error (e.g., division by zero)";
-        }
-        if (className.contains("NumberFormat")) {
-            return "Invalid number format. Check the string you're trying to parse";
-        }
-
-        return "Check the values and operations in your code";
-    }
-
-    /**
-     * Provides generic suggestions based on error message and input.
-     */
-    private String getGenericSuggestion(String errorMsg, String input) {
-        if (input.contains("package ")) {
-            return "Use 'module' instead of 'package' in Firefly";
-        }
-        if (input.contains("import ")) {
-            return "Use 'use' instead of 'import' in Firefly";
-        }
-        if (input.contains("function ") || input.contains("def ")) {
-            return "Use 'fn' to define functions in Firefly";
-        }
-        if (input.contains("void")) {
-            return "Use 'Void' (capitalized) for the void type in Firefly";
-        }
-
-        return null;
-    }
-    
-    /**
-     * Checks if the input is a definition (function, class, etc.).
-     */
-    private boolean isDefinition(String input) {
-        String trimmed = input.trim();
-        return trimmed.startsWith("fn ") || 
-               trimmed.startsWith("class ") || 
-               trimmed.startsWith("struct ") ||
-               trimmed.startsWith("data ") ||
-               trimmed.startsWith("trait ") ||
-               trimmed.startsWith("impl ");
-    }
-    
-    /**
-     * Evaluates an expression or statement.
-     */
-    private EvalResult evalExpression(String input) throws Exception {
-        snippetCounter++;
-        // Use camelCase for function names (Firefly convention)
-        String snippetName = "replSnippet" + snippetCounter;
-
-        // Create a new ClassLoader for each evaluation to avoid conflicts
-        // This allows us to redefine the Main class each time
-        ReplClassLoader evalClassLoader = new ReplClassLoader();
-
-        // Build complete source code
-        StringBuilder sourceBuilder = new StringBuilder();
-        sourceBuilder.append("module repl\n\n");
-
-        // Add imports
-        for (String imp : imports) {
-            sourceBuilder.append(imp).append("\n");
-        }
-        sourceBuilder.append("\n");
-
-        // Add previous definitions
-        for (String def : definitions) {
-            sourceBuilder.append(def).append("\n\n");
-        }
-
-        // Check if input is a function/class definition
-        String trimmedInput = input.trim();
-        boolean isDefinition = trimmedInput.startsWith("fn ") ||
-                               trimmedInput.startsWith("class ") ||
-                               trimmedInput.startsWith("use ");
-
-        if (isDefinition) {
-            // For definitions, compile them to validate syntax but don't execute
-            // Just add them to the definitions list for future use
-
-            // First, validate the definition by trying to compile it
-            sourceBuilder.append(trimmedInput).append("\n\n");
-
-            // Add a dummy fly() function to make it a valid compilation unit
-            sourceBuilder.append("fn fly() -> Void {\n");
-            sourceBuilder.append("    // Placeholder\n");
-            sourceBuilder.append("}\n");
-
-            String source = sourceBuilder.toString();
-
-            // Try to compile to validate syntax
-            try {
-                CharStream charStream = CharStreams.fromString(source);
-                FireflyLexer lexer = new FireflyLexer(charStream);
-                SyntaxErrorListener errorListener = new SyntaxErrorListener();
-                lexer.removeErrorListeners();
-                lexer.addErrorListener(errorListener);
-
-                CommonTokenStream tokens = new CommonTokenStream(lexer);
-                FireflyParser parser = new FireflyParser(tokens);
-                parser.removeErrorListeners();
-                parser.addErrorListener(errorListener);
-
-                ParseTree tree = parser.compilationUnit();
-
-                // Check for syntax errors
-                if (errorListener.hasErrors()) {
-                    SyntaxErrorListener.SyntaxError error = errorListener.getFirstError();
-                    String suggestion = getSyntaxSuggestion(error.getMessage(), null);
-                    return EvalResult.error(
-                        error.getMessage(),
-                        EvalResult.ErrorType.SYNTAX,
-                        error.getLine(),
-                        error.getColumn(),
-                        suggestion
-                    );
-                }
-
-                // Build AST to validate semantics
-                AstBuilder astBuilder = new AstBuilder("<repl>");
-                AstNode ast = astBuilder.visit(tree);
-
-                if (!(ast instanceof CompilationUnit)) {
-                    return EvalResult.error("Failed to build AST", EvalResult.ErrorType.COMPILATION);
-                }
-
-                // Semantic analysis
-                SemanticAnalyzer analyzer = new SemanticAnalyzer(typeResolver);
-                analyzer.analyze((CompilationUnit) ast);
-
-            } catch (Exception e) {
-                return handleException(e, trimmedInput);
-            }
-
-            // If validation passed, add to definitions
-            if (!definitions.contains(trimmedInput)) {
-                definitions.add(trimmedInput);
-            }
-
-            // Extract the name of what was defined for the confirmation message
-            String definitionType = "Definition";
-            String definitionName = "";
-
-            if (trimmedInput.startsWith("fn ")) {
-                definitionType = "Function";
-                // Extract function name: "fn name(...)" -> "name"
-                int nameStart = 3; // after "fn "
-                int nameEnd = trimmedInput.indexOf('(', nameStart);
-                if (nameEnd > nameStart) {
-                    definitionName = trimmedInput.substring(nameStart, nameEnd).trim();
-
-                    // Extract signature and return type
-                    int arrowPos = trimmedInput.indexOf("->", nameEnd);
-                    String signature = "";
-                    String returnType = "Void";
-
-                    if (arrowPos > 0) {
-                        signature = trimmedInput.substring(nameStart, arrowPos).trim();
-                        int bracePos = trimmedInput.indexOf('{', arrowPos);
-                        if (bracePos > arrowPos) {
-                            returnType = trimmedInput.substring(arrowPos + 2, bracePos).trim();
-                        }
-                    } else {
-                        signature = trimmedInput.substring(nameStart, trimmedInput.indexOf('{', nameEnd)).trim();
-                    }
-
-                    // Add to functions list
-                    functions.add(new FunctionInfo(definitionName, signature, returnType));
-                }
-            } else if (trimmedInput.startsWith("class ")) {
-                definitionType = "Class";
-                int nameStart = 6; // after "class "
-                int nameEnd = trimmedInput.indexOf(' ', nameStart);
-                if (nameEnd == -1) nameEnd = trimmedInput.indexOf('{', nameStart);
-                if (nameEnd > nameStart) {
-                    definitionName = trimmedInput.substring(nameStart, nameEnd).trim();
-
-                    // Add to classes list
-                    classes.add(new ClassInfo(definitionName));
-                }
-            } else if (trimmedInput.startsWith("use ")) {
-                definitionType = "Import";
-                definitionName = trimmedInput.substring(4).trim();
-                // Also add to imports list
-                if (!imports.contains(definitionName)) {
-                    imports.add(definitionName);
-                }
-            }
-
-            // Return success with a confirmation message
-            String message = definitionName.isEmpty() ?
-                definitionType + " added" :
-                definitionType + " '" + definitionName + "' defined";
-            return EvalResult.success(message, "Definition");
-        } else {
-            // Wrap input in a function
-            sourceBuilder.append("fn ").append(snippetName).append("() -> Void {\n");
-
-            // For expressions (no semicolon), try to print the result
-            // For statements (with semicolon), just execute
-            if (!trimmedInput.endsWith(";")) {
-                // Only wrap in println() if it's a simple expression (no function call)
-                // Function calls might return Void, which can't be printed
-                boolean isFunctionCall = trimmedInput.contains("(") && trimmedInput.contains(")");
-
-                if (isFunctionCall) {
-                    // Just execute - if it prints something, we'll see it
-                    sourceBuilder.append("    ").append(trimmedInput).append(";\n");
-                } else {
-                    // Simple expression - wrap in println to show the result
-                    sourceBuilder.append("    println(").append(trimmedInput).append(");\n");
-                }
-            } else {
-                sourceBuilder.append("    ").append(trimmedInput).append("\n");
-            }
-
-            sourceBuilder.append("}\n\n");
-        }
-
-        // Add the fly() entry point that calls our snippet
-        sourceBuilder.append("fn fly() -> Void {\n");
-        sourceBuilder.append("    ").append(snippetName).append("();\n");
-        sourceBuilder.append("}\n");
-
-        String source = sourceBuilder.toString();
-
-        // Compile the source with error listener
-        CharStream charStream = CharStreams.fromString(source);
-        FireflyLexer lexer = new FireflyLexer(charStream);
-
-        // Custom error listener to capture syntax errors
-        SyntaxErrorListener errorListener = new SyntaxErrorListener();
-        lexer.removeErrorListeners();
-        lexer.addErrorListener(errorListener);
-
-        CommonTokenStream tokens = new CommonTokenStream(lexer);
-        FireflyParser parser = new FireflyParser(tokens);
-        parser.removeErrorListeners();
-        parser.addErrorListener(errorListener);
-
-        ParseTree tree = parser.compilationUnit();
-
-        // Check for syntax errors
-        if (errorListener.hasErrors()) {
-            SyntaxErrorListener.SyntaxError error = errorListener.getFirstError();
-            String suggestion = getSyntaxSuggestion(error.getMessage(), null);
-            return EvalResult.error(
-                error.getMessage(),
-                EvalResult.ErrorType.SYNTAX,
-                error.getLine(),
-                error.getColumn(),
-                suggestion
-            );
-        }
-
-        // Build AST
-        AstBuilder astBuilder = new AstBuilder("<repl>");
-        AstNode ast = astBuilder.visit(tree);
-
-        if (!(ast instanceof CompilationUnit)) {
-            return EvalResult.error("Failed to build AST", EvalResult.ErrorType.COMPILATION);
-        }
-
-        // Semantic analysis
-        SemanticAnalyzer analyzer = new SemanticAnalyzer(typeResolver);
-        analyzer.analyze((CompilationUnit) ast);
-
-        // Generate bytecode
-        BytecodeGenerator generator = new BytecodeGenerator(typeResolver);
-        Map<String, byte[]> classes = generator.generate((CompilationUnit) ast);
-
-        // Load classes using the evaluation-specific ClassLoader
-        String mainClassName = null;
-        for (Map.Entry<String, byte[]> entry : classes.entrySet()) {
-            // Convert path format (repl/Main) to class name format (repl.Main)
-            String className = entry.getKey().replace('/', '.');
-            evalClassLoader.defineClass(className, entry.getValue());
-            // Remember the main class name
-            if (entry.getKey().endsWith("/Main") || entry.getKey().equals("Main")) {
-                mainClassName = className;
-            }
-        }
-
-        if (mainClassName == null) {
-            return EvalResult.error("Main class not found in generated bytecode", EvalResult.ErrorType.COMPILATION);
-        }
-
-        // Execute the snippet function
-        // The function now prints its own result, so we just invoke it
-        try {
-            Class<?> mainClass = evalClassLoader.loadClass(mainClassName);
-            Method method = mainClass.getMethod(snippetName);
-            method.invoke(null);
-
-            // Return success with no value (the function already printed the result)
-            return EvalResult.success(null, "Void");
-        } catch (VerifyError e) {
-            // VerifyError usually means bytecode issue - often from wrong number of arguments
-            String message = "Bytecode verification error";
-            String suggestion = null;
-
-            if (e.getMessage() != null && e.getMessage().contains("Operand stack underflow")) {
-                message = "Invalid bytecode: possible argument mismatch in function call";
-                suggestion = "Check that function calls have the correct number and types of arguments";
-            }
-
-            return EvalResult.error(message, EvalResult.ErrorType.COMPILATION, 0, 0, suggestion);
-        } catch (NoSuchMethodException e) {
-            return EvalResult.error("Function not found: " + snippetName, EvalResult.ErrorType.COMPILATION);
-        }
-    }
-
-    /**
-     * Custom error listener to capture syntax errors.
-     */
-    private static class SyntaxErrorListener extends BaseErrorListener {
-        private final List<SyntaxError> errors = new ArrayList<>();
-
-        static class SyntaxError {
-            private final int line;
-            private final int column;
-            private final String message;
-
-            SyntaxError(int line, int column, String message) {
-                this.line = line;
-                this.column = column;
-                this.message = message;
-            }
-
-            public int getLine() { return line; }
-            public int getColumn() { return column; }
-            public String getMessage() { return message; }
-        }
-
-        @Override
-        public void syntaxError(Recognizer<?, ?> recognizer, Object offendingSymbol,
-                               int line, int charPositionInLine, String msg, RecognitionException e) {
-            errors.add(new SyntaxError(line, charPositionInLine, msg));
-        }
-
-        public boolean hasErrors() {
-            return !errors.isEmpty();
-        }
-
-        public SyntaxError getFirstError() {
-            return errors.isEmpty() ? null : errors.get(0);
-        }
-    }
-    
-    /**
-     * Resets the REPL state.
-     */
-    public void reset() {
-        variables.clear();
-        imports.clear();
-        definitions.clear();
-        snippetCounter = 0;
-        addDefaultImports();
-    }
-
-    /**
-     * Gets the current definitions.
-     */
-    public List<String> getDefinitions() {
-        return new ArrayList<>(definitions);
     }
 }
-
