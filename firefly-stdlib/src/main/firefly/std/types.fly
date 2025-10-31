@@ -1,0 +1,139 @@
+/**
+ * Firefly Standard Library - Types Module
+ *
+ * Defines all native Firefly types with their corresponding JVM mappings.
+ * Users should use these types instead of Java types directly.
+ *
+ * PRIMITIVE TYPES:
+ * ================
+ * - Int: 32-bit integers (maps to JVM int)
+ * - Long: 64-bit integers (maps to JVM long)
+ * - Float: 64-bit floating point numbers (maps to JVM double)
+ * - Double: Alias of Float for compatibility
+ * - Bool: Boolean values (maps to JVM boolean)
+ * - Char: Unicode characters (maps to JVM char)
+ * - Byte: 8-bit integers (maps to JVM byte)
+ * - Short: 16-bit integers (maps to JVM short)
+ *
+ * BASIC TYPES:
+ * ============
+ * - String: Immutable text strings
+ * - UUID: Universal unique identifiers
+ * - BigDecimal: Arbitrary precision decimal numbers
+ * - BigInteger: Arbitrary precision integers
+ *
+ * DATE AND TIME TYPES:
+ * ====================
+ * - Instant: Point in time (timestamp)
+ * - LocalDate: Date without timezone
+ * - LocalTime: Time without timezone
+ * - LocalDateTime: Date and time without timezone
+ * - ZonedDateTime: Date and time with timezone
+ * - Duration: Time duration (seconds/nanoseconds)
+ * - Period: Time period (years/months/days)
+ *
+ * COLLECTION TYPES:
+ * =================
+ * - List<T>: Mutable ordered list
+ * - ArrayList<T>: Array-based List implementation
+ * - Set<T>: Set without duplicates
+ * - HashSet<T>: Hash-based Set implementation
+ * - Map<K,V>: Key-value map
+ * - HashMap<K,V>: Hash-based Map implementation
+ * - Queue<T>: FIFO queue
+ * - Deque<T>: Double-ended queue
+ * - Stream<T>: Data stream for functional processing
+ *
+ * OPTIONAL TYPES:
+ * ===============
+ * - Optional<T>: Value that may or may not be present
+ *
+ * I/O TYPES:
+ * ==========
+ * - Path: File system path
+ * - File: File system file
+ * - URI: Uniform resource identifier
+ * - URL: Uniform resource locator
+ * - InputStream: Byte input stream
+ * - OutputStream: Byte output stream
+ * - Reader: Character input stream
+ * - Writer: Character output stream
+ *
+ * FUNCTIONAL TYPES:
+ * =================
+ * - Function<T,R>: Function that transforms T into R
+ * - Predicate<T>: Function that evaluates T to Bool
+ * - Consumer<T>: Function that consumes T without returning
+ * - Supplier<T>: Function that produces T without arguments
+ * - BiFunction<T,U,R>: Two-argument function
+ *
+ * CONCURRENCY TYPES:
+ * ==================
+ * - Future<T>: Result of an asynchronous computation
+ * - CompletableFuture<T>: Future that can be manually completed
+ * - Executor: Executor of asynchronous tasks
+ *
+ * EXCEPTION TYPES:
+ * ================
+ * - Exception: Base exception
+ * - RuntimeException: Runtime exception
+ * - Throwable: Base of all exceptions
+ *
+ * REGULAR EXPRESSION TYPES:
+ * =========================
+ * - Pattern: Compiled regular expression pattern
+ * - Matcher: Pattern matching engine
+ *
+ * ARRAYS:
+ * =======
+ * - Array<T>: Generic array
+ * - Int[]: Integer array
+ * - String[]: String array
+ *
+ * NOTE: These types are registered internally in the compiler
+ * (FireflyType.java) and this file serves as standard library documentation.
+ * The compiler recognizes these names and automatically maps them to their
+ * JVM representations.
+ *
+ * USAGE EXAMPLES:
+ * ===============
+ * ```firefly
+ * // Primitive types
+ * let x: Int = 42
+ * let y: Float = 3.14
+ * let name: String = "Firefly"
+ * 
+ * // Collections
+ * let numbers: List<Int> = ArrayList()
+ * let unique: Set<String> = HashSet()
+ * let mapping: Map<String, Int> = HashMap()
+ * 
+ * // Optionals
+ * let maybeValue: Optional<String> = Optional.of("hello")
+ * 
+ * // Date and time
+ * let now: Instant = Instant.now()
+ * let today: LocalDate = LocalDate.now()
+ * 
+ * // I/O
+ * let path: Path = Path.of("/tmp/file.txt")
+ * let uri: URI = URI.create("https://example.com")
+ * 
+ * // UUID
+ * let id: UUID = UUID.randomUUID()
+ * ```
+ *
+ * @module firefly::std::types
+ * @since 1.0.0
+ * @status COMPLETE
+ */
+
+module firefly::std::types
+
+/**
+ * Types documentation - this module is primarily for documentation.
+ * Types are registered internally in the compiler.
+ *
+ * @return Always returns 0
+ */
+fn typesInfo() -> Int = 0
