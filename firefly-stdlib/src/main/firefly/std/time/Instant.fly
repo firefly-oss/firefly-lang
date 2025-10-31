@@ -1,0 +1,113 @@
+/**
+ * Firefly Instant Type
+ * 
+ * Represents an instantaneous point on the timeline (timestamp).
+ * This is Firefly's native timestamp type, internally backed by java.time.Instant
+ * but exposed with Firefly-idiomatic APIs.
+ *
+ * @module firefly::std::time::Instant
+ * @since 1.0.0
+ */
+
+module firefly::std::time
+
+use java::time::Instant as JInstant
+
+/**
+ * Instant represents a precise moment on the global timeline.
+ * Unlike Date or DateTime, Instant is always in UTC.
+ * 
+ * Examples:
+ * ```firefly
+ * let now = Instant.now()
+ * let epoch = Instant.ofEpochSecond(0)
+ * let later = now.plusSeconds(3600)
+ * ```
+ */
+spark Instant {
+    internal: JInstant
+    
+    /**
+     * Get the current instant from the system clock
+     */
+    fn now() -> Instant {
+        return Instant { internal: JInstant.now() };
+    }
+    
+    /**
+     * Create an instant from Unix epoch seconds
+     */
+    fn ofEpochSecond(seconds: Long) -> Instant {
+        return Instant { internal: JInstant.ofEpochSecond(seconds) };
+    }
+    
+    /**
+     * Create an instant from Unix epoch milliseconds
+     */
+    fn ofEpochMilli(millis: Long) -> Instant {
+        return Instant { internal: JInstant.ofEpochMilli(millis) };
+    }
+    
+    /**
+     * Parse an instant from ISO-8601 format
+     */
+    fn parse(text: String) -> Instant {
+        return Instant { internal: JInstant.parse(text) };
+    }
+    
+    /**
+     * Get Unix epoch seconds
+     */
+    fn toEpochSecond(self) -> Long {
+        return self.internal.getEpochSecond();
+    }
+    
+    /**
+     * Get Unix epoch milliseconds
+     */
+    fn toEpochMilli(self) -> Long {
+        return self.internal.toEpochMilli();
+    }
+    
+    /**
+     * Add seconds to this instant
+     */
+    fn plusSeconds(self, seconds: Long) -> Instant {
+        return Instant { internal: self.internal.plusSeconds(seconds) };
+    }
+    
+    /**
+     * Add milliseconds to this instant
+     */
+    fn plusMillis(self, millis: Long) -> Instant {
+        return Instant { internal: self.internal.plusMillis(millis) };
+    }
+    
+    /**
+     * Subtract seconds from this instant
+     */
+    fn minusSeconds(self, seconds: Long) -> Instant {
+        return Instant { internal: self.internal.minusSeconds(seconds) };
+    }
+    
+    /**
+     * Check if this instant is before another
+     */
+    fn isBefore(self, other: Instant) -> Bool {
+        return self.internal.isBefore(other.internal);
+    }
+    
+    /**
+     * Check if this instant is after another
+     */
+    fn isAfter(self, other: Instant) -> Bool {
+        return self.internal.isAfter(other.internal);
+    }
+    
+    /**
+     * Format this instant as ISO-8601 string
+     */
+    fn toString(self) -> String {
+        return self.internal.toString();
+    }
+}

@@ -1,0 +1,65 @@
+/**
+ * Firefly Time Module
+ *
+ * Native Firefly types for dates, times, and durations.
+ * All types wrap java.time but expose Firefly-idiomatic APIs.
+ *
+ * NATIVE TYPES:
+ * =============
+ * - Date: Calendar date without time (year, month, day)
+ *   Wraps java.time.LocalDate with Firefly API
+ *
+ * - DateTime: Date and time without timezone
+ *   Wraps java.time.LocalDateTime with Firefly API
+ *
+ * - Instant: Precise moment on the timeline (UTC timestamp)
+ *   Wraps java.time.Instant with Firefly API
+ *
+ * - Duration: Time-based amount (seconds, milliseconds)
+ *   Wraps java.time.Duration with Firefly API
+ *
+ * USAGE EXAMPLES:
+ * ===============
+ * ```firefly
+ * use firefly::std::time::{Date, DateTime, Instant, Duration}
+ *
+ * // Dates
+ * let today = Date.now()
+ * let birthday = Date.of(1990, 5, 15)
+ * let tomorrow = today.plusDays(1)
+ *
+ * // DateTimes
+ * let now = DateTime.now()
+ * let meeting = DateTime.of(2025, 10, 31, 14, 30, 0)
+ * let later = now.plusHours(2)
+ *
+ * // Instants (timestamps)
+ * let timestamp = Instant.now()
+ * let epoch = Instant.ofEpochSecond(0)
+ *
+ * // Durations
+ * let oneHour = Duration.ofHours(1)
+ * let fiveMinutes = Duration.ofMinutes(5)
+ * let total = oneHour.plus(fiveMinutes)
+ * ```
+ *
+ * WHY NATIVE TYPES?
+ * =================
+ * Instead of using java.time.LocalDate directly, Firefly provides:
+ * - Consistent API across all date/time types
+ * - Firefly naming conventions (e.g., `plusDays` instead of `plus`)
+ * - Better integration with Firefly type system
+ * - Room for future optimizations or implementations
+ * - Cleaner separation from JVM internals
+ *
+ * @module firefly::std::time
+ * @since 1.0.0
+ * @status COMPLETE
+ */
+
+module firefly::std::time
+
+/**
+ * Module documentation marker
+ */
+fn timeModuleInfo() -> Int = 0

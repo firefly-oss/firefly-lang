@@ -1,0 +1,133 @@
+/**
+ * Firefly Duration Type
+ * 
+ * Represents a time-based amount of time (seconds, milliseconds, etc.).
+ * This is Firefly's native duration type, internally backed by java.time.Duration
+ * but exposed with Firefly-idiomatic APIs.
+ *
+ * @module firefly::std::time::Duration
+ * @since 1.0.0
+ */
+
+module firefly::std::time
+
+use java::time::Duration as JDuration
+
+/**
+ * Duration represents an amount of time measured in seconds and nanoseconds.
+ * 
+ * Examples:
+ * ```firefly
+ * let oneHour = Duration.ofHours(1)
+ * let fiveMinutes = Duration.ofMinutes(5)
+ * let total = oneHour.plus(fiveMinutes)
+ * ```
+ */
+spark Duration {
+    internal: JDuration
+    
+    /**
+     * Create a duration of zero length
+     */
+    fn zero() -> Duration {
+        return Duration { internal: JDuration.ZERO };
+    }
+    
+    /**
+     * Create a duration from days
+     */
+    fn ofDays(days: Long) -> Duration {
+        return Duration { internal: JDuration.ofDays(days) };
+    }
+    
+    /**
+     * Create a duration from hours
+     */
+    fn ofHours(hours: Long) -> Duration {
+        return Duration { internal: JDuration.ofHours(hours) };
+    }
+    
+    /**
+     * Create a duration from minutes
+     */
+    fn ofMinutes(minutes: Long) -> Duration {
+        return Duration { internal: JDuration.ofMinutes(minutes) };
+    }
+    
+    /**
+     * Create a duration from seconds
+     */
+    fn ofSeconds(seconds: Long) -> Duration {
+        return Duration { internal: JDuration.ofSeconds(seconds) };
+    }
+    
+    /**
+     * Create a duration from milliseconds
+     */
+    fn ofMillis(millis: Long) -> Duration {
+        return Duration { internal: JDuration.ofMillis(millis) };
+    }
+    
+    /**
+     * Parse a duration from ISO-8601 format (e.g., "PT1H30M")
+     */
+    fn parse(text: String) -> Duration {
+        return Duration { internal: JDuration.parse(text) };
+    }
+    
+    /**
+     * Get total seconds in this duration
+     */
+    fn toSeconds(self) -> Long {
+        return self.internal.getSeconds();
+    }
+    
+    /**
+     * Get total milliseconds in this duration
+     */
+    fn toMillis(self) -> Long {
+        return self.internal.toMillis();
+    }
+    
+    /**
+     * Add another duration to this one
+     */
+    fn plus(self, other: Duration) -> Duration {
+        return Duration { internal: self.internal.plus(other.internal) };
+    }
+    
+    /**
+     * Subtract another duration from this one
+     */
+    fn minus(self, other: Duration) -> Duration {
+        return Duration { internal: self.internal.minus(other.internal) };
+    }
+    
+    /**
+     * Multiply this duration by a scalar
+     */
+    fn multipliedBy(self, multiplicand: Long) -> Duration {
+        return Duration { internal: self.internal.multipliedBy(multiplicand) };
+    }
+    
+    /**
+     * Check if this duration is zero
+     */
+    fn isZero(self) -> Bool {
+        return self.internal.isZero();
+    }
+    
+    /**
+     * Check if this duration is negative
+     */
+    fn isNegative(self) -> Bool {
+        return self.internal.isNegative();
+    }
+    
+    /**
+     * Format this duration as ISO-8601 string
+     */
+    fn toString(self) -> String {
+        return self.internal.toString();
+    }
+}

@@ -1,0 +1,133 @@
+/**
+ * Firefly DateTime Type
+ * 
+ * Represents a date and time without timezone information.
+ * This is Firefly's native datetime type, internally backed by java.time.LocalDateTime
+ * but exposed with Firefly-idiomatic APIs.
+ *
+ * @module firefly::std::time::DateTime
+ * @since 1.0.0
+ */
+
+module firefly::std::time
+
+use java::time::LocalDateTime
+
+/**
+ * DateTime represents a date and time (year, month, day, hour, minute, second) without timezone.
+ * 
+ * Examples:
+ * ```firefly
+ * let now = DateTime.now()
+ * let meeting = DateTime.of(2025, 10, 31, 14, 30, 0)
+ * let later = now.plusHours(2)
+ * ```
+ */
+spark DateTime {
+    internal: LocalDateTime
+    
+    /**
+     * Get the current date-time from the system clock
+     */
+    fn now() -> DateTime {
+        return DateTime { internal: LocalDateTime.now() };
+    }
+    
+    /**
+     * Create a date-time from components
+     */
+    fn of(year: Int, month: Int, day: Int, hour: Int, minute: Int, second: Int) -> DateTime {
+        return DateTime { internal: LocalDateTime.of(year, month, day, hour, minute, second) };
+    }
+    
+    /**
+     * Parse a date-time from ISO-8601 format (YYYY-MM-DDTHH:MM:SS)
+     */
+    fn parse(text: String) -> DateTime {
+        return DateTime { internal: LocalDateTime.parse(text) };
+    }
+    
+    /**
+     * Get the year component
+     */
+    fn year(self) -> Int {
+        return self.internal.getYear();
+    }
+    
+    /**
+     * Get the month component (1-12)
+     */
+    fn month(self) -> Int {
+        return self.internal.getMonthValue();
+    }
+    
+    /**
+     * Get the day of month (1-31)
+     */
+    fn day(self) -> Int {
+        return self.internal.getDayOfMonth();
+    }
+    
+    /**
+     * Get the hour component (0-23)
+     */
+    fn hour(self) -> Int {
+        return self.internal.getHour();
+    }
+    
+    /**
+     * Get the minute component (0-59)
+     */
+    fn minute(self) -> Int {
+        return self.internal.getMinute();
+    }
+    
+    /**
+     * Get the second component (0-59)
+     */
+    fn second(self) -> Int {
+        return self.internal.getSecond();
+    }
+    
+    /**
+     * Add hours to this date-time
+     */
+    fn plusHours(self, hours: Int) -> DateTime {
+        return DateTime { internal: self.internal.plusHours(hours) };
+    }
+    
+    /**
+     * Add minutes to this date-time
+     */
+    fn plusMinutes(self, minutes: Int) -> DateTime {
+        return DateTime { internal: self.internal.plusMinutes(minutes) };
+    }
+    
+    /**
+     * Add days to this date-time
+     */
+    fn plusDays(self, days: Int) -> DateTime {
+        return DateTime { internal: self.internal.plusDays(days) };
+    }
+    
+    /**
+     * Check if this date-time is before another
+     */
+    fn isBefore(self, other: DateTime) -> Bool {
+        return self.internal.isBefore(other.internal);
+    }
+    
+    /**
+     * Check if this date-time is after another
+     */
+    fn isAfter(self, other: DateTime) -> Bool {
+        return self.internal.isAfter(other.internal);
+    }
+    
+    /**
+     * Format this date-time as ISO-8601 string
+     */
+    fn toString(self) -> String {
+        return self.internal.toString();
+    }
+}

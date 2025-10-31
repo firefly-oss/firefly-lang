@@ -1,0 +1,119 @@
+/**
+ * Firefly Date Type
+ * 
+ * Represents a date without time or timezone information (e.g., 2025-10-31).
+ * This is Firefly's native date type, internally backed by java.time.LocalDate
+ * but exposed with Firefly-idiomatic APIs.
+ *
+ * @module firefly::std::time::Date
+ * @since 1.0.0
+ */
+
+module firefly::std::time
+
+use java::time::LocalDate
+
+/**
+ * Date represents a calendar date (year, month, day) without time.
+ * 
+ * Examples:
+ * ```firefly
+ * let today = Date.now()
+ * let birthday = Date.of(1990, 5, 15)
+ * let nextWeek = today.plusDays(7)
+ * ```
+ */
+spark Date {
+    internal: LocalDate
+    
+    /**
+     * Get the current date from the system clock
+     */
+    fn now() -> Date {
+        return Date { internal: LocalDate.now() };
+    }
+    
+    /**
+     * Create a date from year, month, and day
+     */
+    fn of(year: Int, month: Int, day: Int) -> Date {
+        return Date { internal: LocalDate.of(year, month, day) };
+    }
+    
+    /**
+     * Parse a date from ISO-8601 format (YYYY-MM-DD)
+     */
+    fn parse(text: String) -> Date {
+        return Date { internal: LocalDate.parse(text) };
+    }
+    
+    /**
+     * Get the year component
+     */
+    fn year(self) -> Int {
+        return self.internal.getYear();
+    }
+    
+    /**
+     * Get the month component (1-12)
+     */
+    fn month(self) -> Int {
+        return self.internal.getMonthValue();
+    }
+    
+    /**
+     * Get the day of month (1-31)
+     */
+    fn day(self) -> Int {
+        return self.internal.getDayOfMonth();
+    }
+    
+    /**
+     * Add days to this date
+     */
+    fn plusDays(self, days: Int) -> Date {
+        return Date { internal: self.internal.plusDays(days) };
+    }
+    
+    /**
+     * Add months to this date
+     */
+    fn plusMonths(self, months: Int) -> Date {
+        return Date { internal: self.internal.plusMonths(months) };
+    }
+    
+    /**
+     * Add years to this date
+     */
+    fn plusYears(self, years: Int) -> Date {
+        return Date { internal: self.internal.plusYears(years) };
+    }
+    
+    /**
+     * Subtract days from this date
+     */
+    fn minusDays(self, days: Int) -> Date {
+        return Date { internal: self.internal.minusDays(days) };
+    }
+    
+    /**
+     * Check if this date is before another
+     */
+    fn isBefore(self, other: Date) -> Bool {
+        return self.internal.isBefore(other.internal);
+    }
+    
+    /**
+     * Check if this date is after another
+     */
+    fn isAfter(self, other: Date) -> Bool {
+        return self.internal.isAfter(other.internal);
+    }
+    
+    /**
+     * Format this date as ISO-8601 string (YYYY-MM-DD)
+     */
+    fn toString(self) -> String {
+        return self.internal.toString();
+    }
+}
