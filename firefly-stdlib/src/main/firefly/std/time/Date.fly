@@ -23,97 +23,104 @@ use java::time::LocalDate
  * let nextWeek = today.plusDays(7)
  * ```
  */
-spark Date {
-    internal: LocalDate
+class Date {
+    priv let internal: LocalDate;
+    
+    /**
+     * Private constructor - use static factory methods
+     */
+    priv init(ld: LocalDate) {
+        self.internal = ld;
+    }
     
     /**
      * Get the current date from the system clock
      */
-    fn now() -> Date {
-        return Date { internal: LocalDate.now() };
+    pub static fn now() -> Date {
+        return new Date(LocalDate::now());
     }
     
     /**
      * Create a date from year, month, and day
      */
-    fn of(year: Int, month: Int, day: Int) -> Date {
-        return Date { internal: LocalDate.of(year, month, day) };
+    pub static fn of(year: Int, month: Int, day: Int) -> Date {
+        return new Date(LocalDate::of(year, month, day));
     }
     
     /**
      * Parse a date from ISO-8601 format (YYYY-MM-DD)
      */
-    fn parse(text: String) -> Date {
-        return Date { internal: LocalDate.parse(text) };
+    pub static fn parse(text: String) -> Date {
+        return new Date(LocalDate::parse(text));
     }
     
     /**
      * Get the year component
      */
-    fn year(self) -> Int {
-        return self.internal.getYear();
+    pub fn year() -> Int {
+        return self.internal::getYear();
     }
     
     /**
      * Get the month component (1-12)
      */
-    fn month(self) -> Int {
-        return self.internal.getMonthValue();
+    pub fn month() -> Int {
+        return self.internal::getMonthValue();
     }
     
     /**
      * Get the day of month (1-31)
      */
-    fn day(self) -> Int {
-        return self.internal.getDayOfMonth();
+    pub fn day() -> Int {
+        return self.internal::getDayOfMonth();
     }
     
     /**
      * Add days to this date
      */
-    fn plusDays(self, days: Int) -> Date {
-        return Date { internal: self.internal.plusDays(days) };
+    pub fn plusDays(days: Int) -> Date {
+        return new Date(self.internal::plusDays(days));
     }
     
     /**
      * Add months to this date
      */
-    fn plusMonths(self, months: Int) -> Date {
-        return Date { internal: self.internal.plusMonths(months) };
+    pub fn plusMonths(months: Int) -> Date {
+        return new Date(self.internal::plusMonths(months));
     }
     
     /**
      * Add years to this date
      */
-    fn plusYears(self, years: Int) -> Date {
-        return Date { internal: self.internal.plusYears(years) };
+    pub fn plusYears(years: Int) -> Date {
+        return new Date(self.internal::plusYears(years));
     }
     
     /**
      * Subtract days from this date
      */
-    fn minusDays(self, days: Int) -> Date {
-        return Date { internal: self.internal.minusDays(days) };
+    pub fn minusDays(days: Int) -> Date {
+        return new Date(self.internal::minusDays(days));
     }
     
     /**
      * Check if this date is before another
      */
-    fn isBefore(self, other: Date) -> Bool {
-        return self.internal.isBefore(other.internal);
+    pub fn isBefore(other: Date) -> Bool {
+        return self.internal::isBefore(other.internal);
     }
     
     /**
      * Check if this date is after another
      */
-    fn isAfter(self, other: Date) -> Bool {
-        return self.internal.isAfter(other.internal);
+    pub fn isAfter(other: Date) -> Bool {
+        return self.internal::isAfter(other.internal);
     }
     
     /**
      * Format this date as ISO-8601 string (YYYY-MM-DD)
      */
-    fn toString(self) -> String {
-        return self.internal.toString();
+    pub fn toString() -> String {
+        return self.internal::toString();
     }
 }

@@ -54,6 +54,40 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
             </plugin>
+
+            <!-- Exec Maven Plugin - Compile .fly files using Firefly CLI -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>compile-stdlib-fly-files</id>
+                        <phase>process-classes</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <executable>bash</executable>
+                            <workingDirectory>${project.basedir}</workingDirectory>
+                            <arguments>
+                                <argument>-c</argument>
+                                <argument>
+                                    # Compile all .fly files in stdlib
+                                    for flyfile in $(find src/main/firefly -name '*.fly'); do
+                                        echo "Compiling $flyfile...";
+                                        java -cp "${project.build.directory}/../../firefly-compiler/target/firefly-compiler-${project.version}.jar:${project.build.directory}/../../firefly-runtime/target/firefly-runtime-${project.version}.jar:${settings.localRepository}/org/antlr/antlr4-runtime/4.13.1/antlr4-runtime-4.13.1.jar:${settings.localRepository}/org/ow2/asm/asm/9.6/asm-9.6.jar" \
+                                            com.firefly.compiler.FireflyCompiler \
+                                            --source "$flyfile" \
+                                            --output "${project.build.outputDirectory}" \
+                                            --quiet || echo "Warning: Failed to compile $flyfile";
+                                    done
+                                </argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 </project>
