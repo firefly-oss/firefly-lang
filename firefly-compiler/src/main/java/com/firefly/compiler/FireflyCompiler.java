@@ -483,6 +483,16 @@ if (!quiet) ConsoleUI.printDetail(ConsoleUI.formatCount(classCount, "class", "cl
             }
         } catch (Exception e) {
             ConsoleUI.printError("Code generation failed: " + e.getMessage());
+            // Always print a concise stack trace with root cause for better diagnostics
+            Throwable root = e;
+            while (root.getCause() != null) root = root.getCause();
+            System.err.println("  Cause: " + root.getClass().getName() + ": " + (root.getMessage() != null ? root.getMessage() : "<no message>"));
+            for (StackTraceElement ste : root.getStackTrace()) {
+                System.err.println("    at " + ste);
+                // Limit to first 8 stack frames for brevity
+                if (ste.equals(root.getStackTrace()[Math.min(7, root.getStackTrace().length - 1)])) break;
+            }
+            // In DEBUG mode, print full stack trace
             if (System.getenv("DEBUG") != null) {
                 e.printStackTrace();
             }

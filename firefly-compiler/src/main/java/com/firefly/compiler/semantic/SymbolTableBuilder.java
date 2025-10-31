@@ -822,8 +822,19 @@ public class SymbolTableBuilder implements AstVisitor<Void> {
     
     @Override
     public Void visitExceptionDecl(com.firefly.compiler.ast.decl.ExceptionDecl decl) {
-        // Exception declarations register as types
-        // Just like class/struct, don't need special symbol table handling here
+        // Register exception type in current scope so it can be referenced
+        try {
+            currentScope.define(
+                decl.getName(),
+                new NamedType(decl.getName()),
+                SymbolTable.SymbolKind.STRUCT, // treat like a struct/class type symbol
+                false
+            );
+        } catch (SemanticException e) {
+            reporter.error("STB016",
+                "Exception '" + decl.getName() + "' is already defined in this scope",
+                decl.getLocation());
+        }
         return null;
     }
     

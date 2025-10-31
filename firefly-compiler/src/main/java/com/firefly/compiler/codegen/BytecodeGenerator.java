@@ -6,6 +6,7 @@ import com.firefly.compiler.ast.expr.*;
 import com.firefly.compiler.ast.type.*;
 import com.firefly.compiler.ast.pattern.*;
 import com.firefly.compiler.ast.UseDeclaration;
+import com.firefly.compiler.types.FireflyType;
 import org.objectweb.asm.*;
 import static org.objectweb.asm.Opcodes.*;
 
@@ -61,8 +62,95 @@ public class BytecodeGenerator implements AstVisitor<Void> {
     private final Stack<String> classNameStack = new Stack<>();  // Track enclosing class names
     private String currentEnclosingClass = null;  // Current enclosing class (null for top-level)
     
+    // Track field types for current class: fieldName -> descriptor
+    private final Map<String, String> currentClassFieldTypes = new HashMap<>();
+    
     private enum VarType {
         INT, LONG, FLOAT, DOUBLE, BOOLEAN, STRING, OBJECT, STRING_ARRAY
+    }
+    
+    // Flags to ensure helper methods are generated once per class
+    private boolean optionMapHelperGenerated = false;
+    private boolean optionUnwrapOrHelperGenerated = false;
+    private boolean optionIsSomeHelperGenerated = false;
+    
+    // ============ FIREFLY TYPE SYSTEM INTEGRATION ============
+    
+    /**
+     * Convert legacy VarType to modern FireflyType.
+     * This allows gradual migration to the centralized type system.
+     */
+    private FireflyType varTypeToFireflyType(VarType varType) {
+        switch (varType) {
+            case INT: return FireflyType.INT;
+            case LONG: return FireflyType.LONG;
+            case FLOAT:
+            case DOUBLE: return FireflyType.FLOAT;  // Both map to double
+            case BOOLEAN: return FireflyType.BOOLEAN;
+            case STRING: return FireflyType.STRING;
+            case STRING_ARRAY: return FireflyType.STRING_ARRAY;
+            case OBJECT: return FireflyType.OBJECT;
+            default: return FireflyType.OBJECT;
+        }
+    }
+    
+    /**
+     * Convert FireflyType to legacy VarType.
+     * Used during transition period.
+     */
+    private VarType fireflyTypeToVarType(FireflyType fireflyType) {
+        if (fireflyType == FireflyType.INT) return VarType.INT;
+        if (fireflyType == FireflyType.LONG) return VarType.LONG;
+        if (fireflyType == FireflyType.FLOAT || fireflyType == FireflyType.DOUBLE) return VarType.FLOAT;
+        if (fireflyType == FireflyType.BOOLEAN) return VarType.BOOLEAN;
+        if (fireflyType == FireflyType.STRING) return VarType.STRING;
+        if (fireflyType == FireflyType.STRING_ARRAY) return VarType.STRING_ARRAY;
+        return VarType.OBJECT;
+    }
+    
+    /**
+     * Get FireflyType from Firefly type name.
+     * Tries FireflyType registry first, then falls back to manual mapping.
+     */
+    private FireflyType getFireflyTypeFromName(String typeName) {
+        // Try FireflyType registry first
+        FireflyType type = FireflyType.fromFireflyName(typeName);
+        if (type != null) {
+            return type;
+        }
+        
+        // Manual fallback for primitives
+        switch (typeName) {
+            case "Int": return FireflyType.INT;
+            case "Long": return FireflyType.LONG;
+            case "Float":
+            case "Double": return FireflyType.FLOAT;
+            case "Bool":
+            case "Boolean": return FireflyType.BOOLEAN;
+            case "String": return FireflyType.STRING;
+            default: return FireflyType.OBJECT;
+        }
+    }
+    
+    /**
+     * Get store opcode for a variable type using FireflyType system.
+     */
+    private int getStoreOpcodeForType(VarType varType) {
+        return varTypeToFireflyType(varType).getStoreOpcode();
+    }
+    
+    /**
+     * Get load opcode for a variable type using FireflyType system.
+     */
+    private int getLoadOpcodeForType(VarType varType) {
+        return varTypeToFireflyType(varType).getLoadOpcode();
+    }
+    
+    /**
+     * Get return opcode for a variable type using FireflyType system.
+     */
+    private int getReturnOpcodeForType(VarType varType) {
+        return varTypeToFireflyType(varType).getReturnOpcode();
     }
     
     public BytecodeGenerator() {
@@ -85,7 +173,7 @@ public class BytecodeGenerator implements AstVisitor<Void> {
         
         // Now generate code in a second pass
         // Initialize module base path (used by visitClassDecl et al.)
-        String moduleBase = unit.getModuleName() != null ? unit.getModuleName().replace('.', '/') : "";
+        String moduleBase = unit.getModuleName() != null ? unit.getModuleName().replace("::", "/").replace('.', '/') : "";
         this.moduleBasePath = moduleBase;
         this.className = moduleBase;
         classNameStack.clear();
@@ -146,7 +234,7 @@ public class BytecodeGenerator implements AstVisitor<Void> {
     public Void visitCompilationUnit(CompilationUnit unit) {
         // Module name is MANDATORY - store as package path (like Java)
         String moduleName = unit.getModuleName();
-        this.moduleBasePath = moduleName.replace(".", "/");
+        this.moduleBasePath = moduleName.replace("::", "/").replace('.', '/');
         this.className = this.moduleBasePath;  // Base module path only
         // Inform TypeResolver of current module for local class resolution
         this.typeResolver.setCurrentModulePackage(moduleName.replace("::", "."));
@@ -298,6 +386,7 @@ public class BytecodeGenerator implements AstVisitor<Void> {
     public Void visitClassDecl(ClassDecl decl) {
         // Generate separate class file for each class declaration
         // Handle nested classes with proper JVM naming: Outer$Inner
+        
         String classFileName;
         if (decl.isNested() && !classNameStack.isEmpty()) {
             // Nested class: use Outer$Inner naming
@@ -490,6 +579,9 @@ public class BytecodeGenerator implements AstVisitor<Void> {
         String descriptor = getTypeDescriptor(field.getType());
         FieldVisitor fv = cw.visitField(access, field.getName(), descriptor, null, null);
         
+        // Register field type for later GETFIELD/PUTFIELD
+        currentClassFieldTypes.put(field.getName(), descriptor);
+        
         // Add field annotations
         for (Annotation ann : field.getAnnotations()) {
             emitFieldAnnotation(fv, ann);
@@ -498,7 +590,7 @@ public class BytecodeGenerator implements AstVisitor<Void> {
         fv.visitEnd();
     }
     
-    private void generateConstructor(ClassWriter cw, ClassDecl.ConstructorDecl constructor, 
+    private void generateConstructor(ClassWriter cw, ClassDecl.ConstructorDecl constructor,
                                     String className, String superClass) {
         // Build descriptor from parameters
         StringBuilder descriptor = new StringBuilder("(");
@@ -511,6 +603,16 @@ public class BytecodeGenerator implements AstVisitor<Void> {
         int access = constructor.getVisibility() == ClassDecl.Visibility.PUBLIC ? ACC_PUBLIC : ACC_PRIVATE;
         MethodVisitor mv = cw.visitMethod(access, "<init>", descriptor.toString(), null, null);
         
+        // Record parameter names and annotations (for DI/Jackson)
+        int pIdx = 0;
+        for (FunctionDecl.Parameter param : constructor.getParameters()) {
+            mv.visitParameter(param.getName(), 0);
+            for (Annotation ann : param.getAnnotations()) {
+                emitParameterAnnotation(mv, pIdx, ann);
+            }
+            pIdx++;
+        }
+        
         // Add constructor annotations
         for (Annotation ann : constructor.getAnnotations()) {
             emitMethodAnnotation(mv, ann);
@@ -522,8 +624,55 @@ public class BytecodeGenerator implements AstVisitor<Void> {
         mv.visitVarInsn(ALOAD, 0);
         mv.visitMethodInsn(INVOKESPECIAL, superClass, "<init>", "()V", false);
         
-        // Constructor body would be generated here
-        // For now, simplified
+        // Generate constructor body
+        MethodVisitor savedMethodVisitor = methodVisitor;
+        methodVisitor = mv;
+        Map<String, Integer> savedLocalVars = new HashMap<>(localVariables);
+        Map<String, VarType> savedLocalVarTypes = new HashMap<>(localVariableTypes);
+        Map<String, String> savedDeclaredTypes = new HashMap<>(localVariableDeclaredTypes);
+        int savedLocalVarIndex = localVarIndex;
+        
+        localVariables.clear();
+        localVariableTypes.clear();
+        localVariableDeclaredTypes.clear();
+        
+        // Constructor has 'this' at index 0
+        localVariables.put("self", 0);
+        localVariableTypes.put("self", VarType.OBJECT);
+        localVarIndex = 1;
+        
+        // Add parameters to local variables
+        for (FunctionDecl.Parameter param : constructor.getParameters()) {
+            int paramIndex = localVarIndex++;
+            localVariables.put(param.getName(), paramIndex);
+            localVariableTypes.put(param.getName(), getVarTypeFromType(param.getType()));
+            String dotted = getClassNameFromType(param.getType());
+            if (dotted != null) {
+                localVariableDeclaredTypes.put(param.getName(), dotted);
+            }
+        }
+        
+        // Generate constructor body
+        constructor.getBody().accept(this);
+        // If body is a block with a final expression, it may have left a value on stack
+        // Constructors must not return a value, so pop it if present
+        if (constructor.getBody() instanceof BlockExpr) {
+            BlockExpr block = (BlockExpr) constructor.getBody();
+            if (block.getFinalExpression().isPresent()) {
+                // Pop the value from stack (constructor returns void)
+                mv.visitInsn(POP);
+            }
+        }
+        
+        // Restore state
+        methodVisitor = savedMethodVisitor;
+        localVariables.clear();
+        localVariables.putAll(savedLocalVars);
+        localVariableTypes.clear();
+        localVariableTypes.putAll(savedLocalVarTypes);
+        localVariableDeclaredTypes.clear();
+        localVariableDeclaredTypes.putAll(savedDeclaredTypes);
+        localVarIndex = savedLocalVarIndex;
         
         mv.visitInsn(RETURN);
         mv.visitMaxs(0, 0);
@@ -665,9 +814,9 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                             lastExpressionType = VarType.LONG;
                             break;
                         case FLOAT:
-                            methodVisitor.visitTypeInsn(CHECKCAST, "java/lang/Float");
-                            methodVisitor.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Float", "floatValue", "()F", false);
-                            lastExpressionType = VarType.FLOAT;
+                            methodVisitor.visitTypeInsn(CHECKCAST, "java/lang/Double");
+                            methodVisitor.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Double", "doubleValue", "()D", false);
+                            lastExpressionType = VarType.DOUBLE;
                             break;
                         case DOUBLE:
                             methodVisitor.visitTypeInsn(CHECKCAST, "java/lang/Double");
@@ -812,7 +961,7 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                 } else {
                     VarType returnType = getVarTypeFromType(method.getReturnType().get());
                     // If result is Object but return type is primitive, unbox before returning
-                    if (lastExpressionType == VarType.OBJECT) {
+                    if (lastExpressionType == VarType.OBJECT && returnType != VarType.OBJECT) {
                         switch (returnType) {
                             case INT:
                                 methodVisitor.visitTypeInsn(CHECKCAST, "java/lang/Integer");
@@ -825,9 +974,9 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                                 lastExpressionType = VarType.BOOLEAN;
                                 break;
                             case FLOAT:
-                                methodVisitor.visitTypeInsn(CHECKCAST, "java/lang/Float");
-                                methodVisitor.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Float", "floatValue", "()F", false);
-                                lastExpressionType = VarType.FLOAT;
+                                methodVisitor.visitTypeInsn(CHECKCAST, "java/lang/Double");
+                                methodVisitor.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Double", "doubleValue", "()D", false);
+                                lastExpressionType = VarType.DOUBLE;
                                 break;
                             case LONG:
                                 methodVisitor.visitTypeInsn(CHECKCAST, "java/lang/Long");
@@ -843,13 +992,37 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                                 // No-op for reference types
                         }
                     }
+                    // If result is primitive but return type is Object, box before returning
+                    else if (lastExpressionType != VarType.OBJECT && returnType == VarType.OBJECT) {
+                        switch (lastExpressionType) {
+                            case INT:
+                                methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;", false);
+                                lastExpressionType = VarType.OBJECT;
+                                break;
+                            case BOOLEAN:
+                                methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;", false);
+                                lastExpressionType = VarType.OBJECT;
+                                break;
+                            case FLOAT:
+                            case DOUBLE:
+                                methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Double", "valueOf", "(D)Ljava/lang/Double;", false);
+                                lastExpressionType = VarType.OBJECT;
+                                break;
+                            case LONG:
+                                methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Long", "valueOf", "(J)Ljava/lang/Long;", false);
+                                lastExpressionType = VarType.OBJECT;
+                                break;
+                            default:
+                                // STRING and other reference types don't need boxing
+                        }
+                    }
                     switch (returnType) {
                         case INT:
                         case BOOLEAN:
                             methodVisitor.visitInsn(IRETURN);
                             break;
                         case FLOAT:
-                            methodVisitor.visitInsn(FRETURN);
+                            methodVisitor.visitInsn(DRETURN);
                             break;
                         case STRING:
                         case OBJECT:
@@ -862,7 +1035,11 @@ public class BytecodeGenerator implements AstVisitor<Void> {
             }
         }
         
-        methodVisitor.visitMaxs(0, 0);
+        try {
+            methodVisitor.visitMaxs(0, 0);
+        } catch (Exception ex) {
+            throw new RuntimeException("ASM frame computation failed in method '" + method.getName() + "' of class '" + classFileName + "'", ex);
+        }
         methodVisitor.visitEnd();
         
         // Restore previous state
@@ -898,6 +1075,9 @@ public class BytecodeGenerator implements AstVisitor<Void> {
         }
         
         methodVisitor.visitCode();
+        // Mark start of method for stable frame computation
+        Label __flyStart = new Label();
+        methodVisitor.visitLabel(__flyStart);
         
         // Set up local variables
         Map<String, Integer> savedLocalVars = new HashMap<>(localVariables);
@@ -919,6 +1099,10 @@ public class BytecodeGenerator implements AstVisitor<Void> {
         
         // Add return (fly returns void/Unit)
         methodVisitor.visitInsn(RETURN);
+        
+        // Mark end label
+        Label __flyEnd = new Label();
+        methodVisitor.visitLabel(__flyEnd);
         
         methodVisitor.visitMaxs(0, 0);
         methodVisitor.visitEnd();
@@ -1131,6 +1315,12 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                 localVariables.put(param.getName(), paramIndex);
                 VarType paramVarType = getVarTypeFromType(param.getType());
                 localVariableTypes.put(param.getName(), paramVarType);
+                
+                // Track declared class name for parameters to aid pattern resolution
+                String dottedClass = getClassNameFromType(param.getType());
+                if (dottedClass != null) {
+                    localVariableDeclaredTypes.put(param.getName(), dottedClass);
+                }
                 
                 // Increment by type size (1 for most types, 2 for long/double)
                 localVarIndex += getVarTypeSize(paramVarType);
@@ -2212,7 +2402,7 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                 switch (rt) {
                     case INT:
                     case BOOLEAN: hm.visitInsn(IRETURN); break;
-                    case FLOAT: hm.visitInsn(FRETURN); break;
+                    case FLOAT: hm.visitInsn(DRETURN); break;
                     case LONG: hm.visitInsn(LRETURN); break;
                     default: hm.visitInsn(ARETURN); break;
                 }
@@ -2320,7 +2510,7 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                         mv.visitInsn(IRETURN);
                         break;
                     case FLOAT:
-                        mv.visitInsn(FRETURN);
+                        mv.visitInsn(DRETURN);
                         break;
                     default:
                         mv.visitInsn(ARETURN);
@@ -2359,9 +2549,11 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                 case DOUBLE: return DLOAD;
                 default: return ALOAD;
             }
-        } else if (type instanceof NamedType) {
-            // Handle NamedType wrapping primitives
-            String name = ((NamedType) type).getName();
+        } else if (type instanceof NamedType || type instanceof com.firefly.compiler.ast.type.GenericType) {
+            // Handle Named/Generic wrapping primitives by name
+            String name = (type instanceof NamedType)
+                ? ((NamedType) type).getName()
+                : ((com.firefly.compiler.ast.type.GenericType) type).getBaseName();
             switch (name) {
                 case "Int": return ILOAD;
                 case "Long": return LLOAD;
@@ -2386,8 +2578,10 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                 case VOID: return RETURN;
                 default: return ARETURN;
             }
-        } else if (type instanceof NamedType) {
-            String name = ((NamedType) type).getName();
+        } else if (type instanceof NamedType || type instanceof com.firefly.compiler.ast.type.GenericType) {
+            String name = (type instanceof NamedType)
+                ? ((NamedType) type).getName()
+                : ((com.firefly.compiler.ast.type.GenericType) type).getBaseName();
             switch (name) {
                 case "Int": return IRETURN;
                 case "Long": return LRETURN;
@@ -2438,8 +2632,12 @@ public class BytecodeGenerator implements AstVisitor<Void> {
             if (kind == PrimitiveType.Kind.FLOAT || kind == PrimitiveType.Kind.DOUBLE || kind == PrimitiveType.Kind.LONG) {
                 return 2; // double and long take 2 slots
             }
-        } else if (type instanceof NamedType) {
-            String name = ((NamedType) type).getName();
+        } else if (type instanceof NamedType || type instanceof com.firefly.compiler.ast.type.GenericType) {
+            String name = (type instanceof NamedType)
+                ? ((NamedType) type).getName()
+                : ((com.firefly.compiler.ast.type.GenericType) type).getBaseName();
+            int lt3 = name.indexOf('<');
+            if (lt3 > 0) name = name.substring(0, lt3);
             if ("Float".equals(name) || "Double".equals(name) || "Long".equals(name)) {
                 return 2; // double and long take 2 slots
             }
@@ -2452,7 +2650,7 @@ public class BytecodeGenerator implements AstVisitor<Void> {
      * Long and Double take 2 slots, others take 1.
      */
     private int getVarTypeSize(VarType type) {
-        if (type == VarType.LONG || type == VarType.DOUBLE) {
+        if (type == VarType.LONG || type == VarType.DOUBLE || type == VarType.FLOAT) {
             return 2;
         }
         return 1;
@@ -2478,9 +2676,9 @@ public class BytecodeGenerator implements AstVisitor<Void> {
             methodVisitor.visitInsn(I2D);
             lastExpressionType = VarType.DOUBLE;
         }
-        // Float to Double conversion
+        // Float to Double conversion (no-op in Firefly since Float already maps to JVM double)
         else if (actualType == VarType.FLOAT && "D".equals(expectedDesc)) {
-            methodVisitor.visitInsn(F2D);
+            // No conversion needed - VarType.FLOAT already maps to JVM double
             lastExpressionType = VarType.DOUBLE;
         }
         // Long to Double conversion
@@ -3063,27 +3261,17 @@ public class BytecodeGenerator implements AstVisitor<Void> {
             inStatementContext = true;
             stmt.getExpression().accept(this);
             inStatementContext = false;
-            
-            // Pop unused result if the expression produced a value
-            // We need to pop non-void expression results when used as statements
+            // Discard any value left on the stack by expression statements
             if (!lastCallWasVoid && lastExpressionType != null) {
-                // Pop the unused value from the stack
                 switch (lastExpressionType) {
-                    case INT:
-                    case BOOLEAN:
-                        methodVisitor.visitInsn(POP);
-                        break;
-                    case FLOAT:
-                    case DOUBLE:
                     case LONG:
+                    case DOUBLE:
+                        // 64-bit primitives occupy two stack slots
                         methodVisitor.visitInsn(POP2);
                         break;
-                    case STRING:
-                    case STRING_ARRAY:
-                    case OBJECT:
+                    default:
                         methodVisitor.visitInsn(POP);
                         break;
-                    // VOID types don't push anything, so no pop needed
                 }
             }
         }
@@ -3107,52 +3295,107 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                 if (leftType == VarType.STRING || rightType == VarType.STRING) {
                     generateStringConcatenation(leftType, rightType);
                     lastExpressionType = VarType.STRING;
+                } else if (leftType == VarType.DOUBLE || leftType == VarType.FLOAT || 
+                          rightType == VarType.DOUBLE || rightType == VarType.FLOAT) {
+                    // Double/Float addition - convert Int to Double if needed
+                    convertMixedTypesForDoubleOp(leftType, rightType);
+                    methodVisitor.visitInsn(DADD);
+                    lastExpressionType = VarType.DOUBLE;
+                } else if (leftType == VarType.LONG || rightType == VarType.LONG) {
+                    // Long addition
+                    convertMixedTypesForLongOp(leftType, rightType);
+                    methodVisitor.visitInsn(LADD);
+                    lastExpressionType = VarType.LONG;
                 } else {
-                    // Numeric addition
+                    // Int addition
                     methodVisitor.visitInsn(IADD);
                     lastExpressionType = VarType.INT;
                 }
                 break;
             case SUBTRACT:
-                methodVisitor.visitInsn(ISUB);
-                lastExpressionType = VarType.INT;
+                if (leftType == VarType.DOUBLE || leftType == VarType.FLOAT || 
+                   rightType == VarType.DOUBLE || rightType == VarType.FLOAT) {
+                    convertMixedTypesForDoubleOp(leftType, rightType);
+                    methodVisitor.visitInsn(DSUB);
+                    lastExpressionType = VarType.DOUBLE;
+                } else if (leftType == VarType.LONG || rightType == VarType.LONG) {
+                    convertMixedTypesForLongOp(leftType, rightType);
+                    methodVisitor.visitInsn(LSUB);
+                    lastExpressionType = VarType.LONG;
+                } else {
+                    methodVisitor.visitInsn(ISUB);
+                    lastExpressionType = VarType.INT;
+                }
                 break;
             case MULTIPLY:
-                methodVisitor.visitInsn(IMUL);
-                lastExpressionType = VarType.INT;
+                if (leftType == VarType.DOUBLE || leftType == VarType.FLOAT || 
+                   rightType == VarType.DOUBLE || rightType == VarType.FLOAT) {
+                    convertMixedTypesForDoubleOp(leftType, rightType);
+                    methodVisitor.visitInsn(DMUL);
+                    lastExpressionType = VarType.DOUBLE;
+                } else if (leftType == VarType.LONG || rightType == VarType.LONG) {
+                    convertMixedTypesForLongOp(leftType, rightType);
+                    methodVisitor.visitInsn(LMUL);
+                    lastExpressionType = VarType.LONG;
+                } else {
+                    methodVisitor.visitInsn(IMUL);
+                    lastExpressionType = VarType.INT;
+                }
                 break;
             case DIVIDE:
-                methodVisitor.visitInsn(IDIV);
-                lastExpressionType = VarType.INT;
+                if (leftType == VarType.DOUBLE || leftType == VarType.FLOAT || 
+                   rightType == VarType.DOUBLE || rightType == VarType.FLOAT) {
+                    convertMixedTypesForDoubleOp(leftType, rightType);
+                    methodVisitor.visitInsn(DDIV);
+                    lastExpressionType = VarType.DOUBLE;
+                } else if (leftType == VarType.LONG || rightType == VarType.LONG) {
+                    convertMixedTypesForLongOp(leftType, rightType);
+                    methodVisitor.visitInsn(LDIV);
+                    lastExpressionType = VarType.LONG;
+                } else {
+                    methodVisitor.visitInsn(IDIV);
+                    lastExpressionType = VarType.INT;
+                }
                 break;
             case MODULO:
-                methodVisitor.visitInsn(IREM);
-                lastExpressionType = VarType.INT;
+                if (leftType == VarType.DOUBLE || leftType == VarType.FLOAT || 
+                   rightType == VarType.DOUBLE || rightType == VarType.FLOAT) {
+                    convertMixedTypesForDoubleOp(leftType, rightType);
+                    methodVisitor.visitInsn(DREM);
+                    lastExpressionType = VarType.DOUBLE;
+                } else if (leftType == VarType.LONG || rightType == VarType.LONG) {
+                    convertMixedTypesForLongOp(leftType, rightType);
+                    methodVisitor.visitInsn(LREM);
+                    lastExpressionType = VarType.LONG;
+                } else {
+                    methodVisitor.visitInsn(IREM);
+                    lastExpressionType = VarType.INT;
+                }
                 break;
             
             // Comparison operations
             case EQUAL:
-                generateComparison(IF_ICMPEQ);
+                generateComparison(IF_ICMPEQ, leftType, rightType);
                 lastExpressionType = VarType.BOOLEAN;
                 break;
             case NOT_EQUAL:
-                generateComparison(IF_ICMPNE);
+                generateComparison(IF_ICMPNE, leftType, rightType);
                 lastExpressionType = VarType.BOOLEAN;
                 break;
             case LESS_THAN:
-                generateComparison(IF_ICMPLT);
+                generateComparison(IF_ICMPLT, leftType, rightType);
                 lastExpressionType = VarType.BOOLEAN;
                 break;
             case LESS_EQUAL:
-                generateComparison(IF_ICMPLE);
+                generateComparison(IF_ICMPLE, leftType, rightType);
                 lastExpressionType = VarType.BOOLEAN;
                 break;
             case GREATER_THAN:
-                generateComparison(IF_ICMPGT);
+                generateComparison(IF_ICMPGT, leftType, rightType);
                 lastExpressionType = VarType.BOOLEAN;
                 break;
             case GREATER_EQUAL:
-                generateComparison(IF_ICMPGE);
+                generateComparison(IF_ICMPGE, leftType, rightType);
                 lastExpressionType = VarType.BOOLEAN;
                 break;
             
@@ -3391,7 +3634,11 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                     if (resolved.isPresent()) {
                         return resolved.get().replace('.', '/');
                     }
-                    // Default: use name as-is, replacing dots with slashes
+                    // Default: qualify with current module if available
+                    if (moduleBasePath != null && !moduleBasePath.isEmpty()) {
+                        return moduleBasePath + "/" + name;
+                    }
+                    // Fallback: use simple name
                     return name.replace('.', '/');
             }
         }
@@ -3516,14 +3763,107 @@ public class BytecodeGenerator implements AstVisitor<Void> {
     }
     
     /**
-     * Generate comparison bytecode that produces a boolean result (0 or 1)
+     * Convert mixed Int/Long or Int/Double operands for double operation.
+     * Stack on entry: [left_value, right_value]
+     * Stack on exit: [left_double, right_double]
      */
-    private void generateComparison(int comparisonOpcode) {
+    private void convertMixedTypesForDoubleOp(VarType leftType, VarType rightType) {
+        // Stack: [left, right]
+        if (leftType == VarType.INT && (rightType == VarType.DOUBLE || rightType == VarType.FLOAT)) {
+            // Convert: [int, double] -> [double, double]
+            // Store right temporarily
+            int tempSlot = localVarIndex;
+            localVarIndex += 2;
+            methodVisitor.visitVarInsn(DSTORE, tempSlot);
+            // Convert left
+            methodVisitor.visitInsn(I2D);
+            // Reload right
+            methodVisitor.visitVarInsn(DLOAD, tempSlot);
+            localVarIndex -= 2;
+        } else if ((leftType == VarType.DOUBLE || leftType == VarType.FLOAT) && rightType == VarType.INT) {
+            // Convert: [double, int] -> [double, double]
+            methodVisitor.visitInsn(I2D);
+        }
+        // If both are already double/float, no conversion needed
+    }
+    
+    /**
+     * Convert mixed Int/Long operands for long operation.
+     * Stack on entry: [left_value, right_value]
+     * Stack on exit: [left_long, right_long]
+     */
+    private void convertMixedTypesForLongOp(VarType leftType, VarType rightType) {
+        // Stack: [left, right]
+        if (leftType == VarType.INT && rightType == VarType.LONG) {
+            // Convert: [int, long] -> [long, long]
+            // Store right temporarily
+            int tempSlot = localVarIndex;
+            localVarIndex += 2;
+            methodVisitor.visitVarInsn(LSTORE, tempSlot);
+            // Convert left
+            methodVisitor.visitInsn(I2L);
+            // Reload right
+            methodVisitor.visitVarInsn(LLOAD, tempSlot);
+            localVarIndex -= 2;
+        } else if (leftType == VarType.LONG && rightType == VarType.INT) {
+            // Convert: [long, int] -> [long, long]
+            methodVisitor.visitInsn(I2L);
+        }
+        // If both are already long, no conversion needed
+    }
+    
+    /**
+     * Generate comparison bytecode that produces a boolean result (0 or 1)
+     * Handles both integer and floating-point comparisons correctly.
+     */
+    private void generateComparison(int comparisonOpcode, VarType leftType, VarType rightType) {
         Label trueLabel = new Label();
         Label endLabel = new Label();
         
-        // Compare and jump to true label if condition holds
-        methodVisitor.visitJumpInsn(comparisonOpcode, trueLabel);
+        // Check if we're comparing floats/doubles
+        if (leftType == VarType.FLOAT || leftType == VarType.DOUBLE || 
+            rightType == VarType.FLOAT || rightType == VarType.DOUBLE) {
+            // For floating point comparisons, we need DCMPG/DCMPL followed by conditional jump
+            // Stack: [left_double, right_double]
+            // DCMPG: returns 1 if left > right, 0 if equal, -1 if left < right (or if either is NaN)
+            methodVisitor.visitInsn(DCMPG);
+            // Stack now: [int_result]
+            
+            // Map IF_ICMP* to IF* (comparing result to 0)
+            int singleOpcode;
+            switch (comparisonOpcode) {
+                case IF_ICMPEQ: singleOpcode = IFEQ; break;  // result == 0
+                case IF_ICMPNE: singleOpcode = IFNE; break;  // result != 0
+                case IF_ICMPLT: singleOpcode = IFLT; break;  // result < 0
+                case IF_ICMPLE: singleOpcode = IFLE; break;  // result <= 0
+                case IF_ICMPGT: singleOpcode = IFGT; break;  // result > 0
+                case IF_ICMPGE: singleOpcode = IFGE; break;  // result >= 0
+                default: throw new RuntimeException("Unsupported comparison opcode: " + comparisonOpcode);
+            }
+            
+            methodVisitor.visitJumpInsn(singleOpcode, trueLabel);
+        } else if (leftType == VarType.LONG || rightType == VarType.LONG) {
+            // For long comparisons, we need LCMP followed by conditional jump
+            methodVisitor.visitInsn(LCMP);
+            // Stack now: [int_result]
+            
+            // Map IF_ICMP* to IF*
+            int singleOpcode;
+            switch (comparisonOpcode) {
+                case IF_ICMPEQ: singleOpcode = IFEQ; break;
+                case IF_ICMPNE: singleOpcode = IFNE; break;
+                case IF_ICMPLT: singleOpcode = IFLT; break;
+                case IF_ICMPLE: singleOpcode = IFLE; break;
+                case IF_ICMPGT: singleOpcode = IFGT; break;
+                case IF_ICMPGE: singleOpcode = IFGE; break;
+                default: throw new RuntimeException("Unsupported comparison opcode: " + comparisonOpcode);
+            }
+            
+            methodVisitor.visitJumpInsn(singleOpcode, trueLabel);
+        } else {
+            // Integer comparison - use IF_ICMP* directly
+            methodVisitor.visitJumpInsn(comparisonOpcode, trueLabel);
+        }
         
         // False case: push 0
         methodVisitor.visitInsn(ICONST_0);
@@ -3542,53 +3882,98 @@ public class BytecodeGenerator implements AstVisitor<Void> {
      * Stack on exit: [result_string]
      */
     private void generateStringConcatenation(VarType leftType, VarType rightType) {
-        // Stack: [left, right]
-        // Store right value in local variable temporarily
-        int rightVar = localVarIndex++;
-        if (rightType == VarType.INT || rightType == VarType.BOOLEAN) {
-            methodVisitor.visitVarInsn(ISTORE, rightVar);
-        } else if (rightType == VarType.LONG) {
-            methodVisitor.visitVarInsn(LSTORE, rightVar);
-            localVarIndex++; // longs take 2 slots
-        } else if (rightType == VarType.FLOAT) {
-            methodVisitor.visitVarInsn(FSTORE, rightVar);
-        } else if (rightType == VarType.DOUBLE) {
-            methodVisitor.visitVarInsn(DSTORE, rightVar);
-            localVarIndex++; // doubles take 2 slots
-        } else {
-            methodVisitor.visitVarInsn(ASTORE, rightVar);
+        // Stack on entry: [left, right]
+        int savedIdx = localVarIndex;
+
+        // Reserve temp slots for both operands
+        int rightSlots = (rightType == VarType.LONG || rightType == VarType.DOUBLE) ? 2 : 1;
+        int rightTmp = localVarIndex; // first free slot
+        localVarIndex += rightSlots;
+
+        // Store right into temp (pop top)
+        switch (rightType) {
+            case INT:
+            case BOOLEAN:
+                methodVisitor.visitVarInsn(ISTORE, rightTmp);
+                break;
+            case LONG:
+                methodVisitor.visitVarInsn(LSTORE, rightTmp);
+                break;
+            case FLOAT:
+            case DOUBLE:
+                methodVisitor.visitVarInsn(DSTORE, rightTmp);
+                break;
+            default:
+                methodVisitor.visitVarInsn(ASTORE, rightTmp);
+                break;
         }
-        
-        // Stack: [left]
-        // Create StringBuilder and append left
+
+        // Now stack: [left]
+        int leftSlots = (leftType == VarType.LONG || leftType == VarType.DOUBLE) ? 2 : 1;
+        int leftTmp = localVarIndex;
+        localVarIndex += leftSlots;
+        // Store left into temp
+        switch (leftType) {
+            case INT:
+            case BOOLEAN:
+                methodVisitor.visitVarInsn(ISTORE, leftTmp);
+                break;
+            case LONG:
+                methodVisitor.visitVarInsn(LSTORE, leftTmp);
+                break;
+            case FLOAT:
+            case DOUBLE:
+                methodVisitor.visitVarInsn(DSTORE, leftTmp);
+                break;
+            default:
+                methodVisitor.visitVarInsn(ASTORE, leftTmp);
+                break;
+        }
+
+        // Create StringBuilder
         methodVisitor.visitTypeInsn(NEW, "java/lang/StringBuilder");
         methodVisitor.visitInsn(DUP);
         methodVisitor.visitMethodInsn(INVOKESPECIAL, "java/lang/StringBuilder", "<init>", "()V", false);
-        // Stack: [left, StringBuilder]
-        methodVisitor.visitInsn(SWAP);
-        // Stack: [StringBuilder, left]
-        appendToStringBuilder(leftType);
         // Stack: [StringBuilder]
-        
-        // Load right value and append
-        if (rightType == VarType.INT || rightType == VarType.BOOLEAN) {
-            methodVisitor.visitVarInsn(ILOAD, rightVar);
-        } else if (rightType == VarType.LONG) {
-            methodVisitor.visitVarInsn(LLOAD, rightVar);
-            localVarIndex--; // restore index
-        } else if (rightType == VarType.FLOAT) {
-            methodVisitor.visitVarInsn(FLOAD, rightVar);
-        } else if (rightType == VarType.DOUBLE) {
-            methodVisitor.visitVarInsn(DLOAD, rightVar);
-            localVarIndex--; // restore index
-        } else {
-            methodVisitor.visitVarInsn(ALOAD, rightVar);
+
+        // Load left back and append
+        switch (leftType) {
+            case INT:
+            case BOOLEAN:
+                methodVisitor.visitVarInsn(ILOAD, leftTmp);
+                break;
+            case LONG:
+                methodVisitor.visitVarInsn(LLOAD, leftTmp);
+                break;
+            case FLOAT:
+            case DOUBLE:
+                methodVisitor.visitVarInsn(DLOAD, leftTmp);
+                break;
+            default:
+                methodVisitor.visitVarInsn(ALOAD, leftTmp);
+                break;
         }
-        localVarIndex--; // restore index
-        // Stack: [StringBuilder, right]
+        appendToStringBuilder(leftType);
+
+        // Load right back and append
+        switch (rightType) {
+            case INT:
+            case BOOLEAN:
+                methodVisitor.visitVarInsn(ILOAD, rightTmp);
+                break;
+            case LONG:
+                methodVisitor.visitVarInsn(LLOAD, rightTmp);
+                break;
+            case FLOAT:
+            case DOUBLE:
+                methodVisitor.visitVarInsn(DLOAD, rightTmp);
+                break;
+            default:
+                methodVisitor.visitVarInsn(ALOAD, rightTmp);
+                break;
+        }
         appendToStringBuilder(rightType);
-        // Stack: [StringBuilder]
-        
+
         // Call toString()
         methodVisitor.visitMethodInsn(
             INVOKEVIRTUAL,
@@ -3597,7 +3982,10 @@ public class BytecodeGenerator implements AstVisitor<Void> {
             "()Ljava/lang/String;",
             false
         );
-        // Stack: [String]
+
+        // Restore localVarIndex (drop temps)
+        localVarIndex = savedIdx;
+        // Stack on exit: [String]
     }
     
     /**
@@ -3710,8 +4098,6 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                 descriptor = "(J)Ljava/lang/StringBuilder;";
                 break;
             case FLOAT:
-                descriptor = "(F)Ljava/lang/StringBuilder;";
-                break;
             case DOUBLE:
                 descriptor = "(D)Ljava/lang/StringBuilder;";
                 break;
@@ -3735,6 +4121,85 @@ public class BytecodeGenerator implements AstVisitor<Void> {
             descriptor,
             false
         );
+    }
+    
+    // Ensure helper methods for std::option are generated on the current class
+    private void ensureOptionMapHelper() {
+        if (optionMapHelperGenerated) return;
+        optionMapHelperGenerated = true;
+        MethodVisitor mv = classWriter.visitMethod(
+            ACC_PRIVATE | ACC_STATIC,
+            "$opt_map",
+            "(Lfirefly/std/option/Option;Ljava/util/function/Function;)Lfirefly/std/option/Option;",
+            null,
+            null
+        );
+        mv.visitCode();
+        Label elseLabel = new Label();
+        // if (!(opt instanceof Option$Some)) goto else
+        mv.visitVarInsn(ALOAD, 0);
+        mv.visitTypeInsn(INSTANCEOF, "firefly/std/option/Option$Some");
+        mv.visitJumpInsn(IFEQ, elseLabel);
+        // return Option.Some(fn.apply(((Option$Some)opt).value0))
+        mv.visitVarInsn(ALOAD, 1); // fn
+        mv.visitVarInsn(ALOAD, 0); // opt
+        mv.visitTypeInsn(CHECKCAST, "firefly/std/option/Option$Some");
+        mv.visitFieldInsn(GETFIELD, "firefly/std/option/Option$Some", "value0", "Ljava/lang/Object;");
+        mv.visitMethodInsn(INVOKEINTERFACE, "java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;", true);
+        mv.visitMethodInsn(INVOKESTATIC, "firefly/std/option/Option", "Some", "(Ljava/lang/Object;)Lfirefly/std/option/Option;", false);
+        mv.visitInsn(ARETURN);
+        // else: return Option.None
+        mv.visitLabel(elseLabel);
+        mv.visitFieldInsn(GETSTATIC, "firefly/std/option/Option", "None", "Lfirefly/std/option/Option;");
+        mv.visitInsn(ARETURN);
+        mv.visitMaxs(0,0);
+        mv.visitEnd();
+    }
+
+    private void ensureOptionUnwrapOrHelper() {
+        if (optionUnwrapOrHelperGenerated) return;
+        optionUnwrapOrHelperGenerated = true;
+        MethodVisitor mv = classWriter.visitMethod(
+            ACC_PRIVATE | ACC_STATIC,
+            "$opt_unwrapOr",
+            "(Lfirefly/std/option/Option;Ljava/lang/Object;)Ljava/lang/Object;",
+            null,
+            null
+        );
+        mv.visitCode();
+        Label elseLabel = new Label();
+        mv.visitVarInsn(ALOAD, 0);
+        mv.visitTypeInsn(INSTANCEOF, "firefly/std/option/Option$Some");
+        mv.visitJumpInsn(IFEQ, elseLabel);
+        // then: return ((Option$Some)opt).value0
+        mv.visitVarInsn(ALOAD, 0);
+        mv.visitTypeInsn(CHECKCAST, "firefly/std/option/Option$Some");
+        mv.visitFieldInsn(GETFIELD, "firefly/std/option/Option$Some", "value0", "Ljava/lang/Object;");
+        mv.visitInsn(ARETURN);
+        // else: return default
+        mv.visitLabel(elseLabel);
+        mv.visitVarInsn(ALOAD, 1);
+        mv.visitInsn(ARETURN);
+        mv.visitMaxs(0,0);
+        mv.visitEnd();
+    }
+
+    private void ensureOptionIsSomeHelper() {
+        if (optionIsSomeHelperGenerated) return;
+        optionIsSomeHelperGenerated = true;
+        MethodVisitor mv = classWriter.visitMethod(
+            ACC_PRIVATE | ACC_STATIC,
+            "$opt_isSome",
+            "(Lfirefly/std/option/Option;)Z",
+            null,
+            null
+        );
+        mv.visitCode();
+        mv.visitVarInsn(ALOAD, 0);
+        mv.visitTypeInsn(INSTANCEOF, "firefly/std/option/Option$Some");
+        mv.visitInsn(IRETURN);
+        mv.visitMaxs(0,0);
+        mv.visitEnd();
     }
     
     /**
@@ -3777,7 +4242,7 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                     methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;", false);
                     break;
                 case FLOAT:
-                    methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Float", "valueOf", "(F)Ljava/lang/Float;", false);
+                    methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Double", "valueOf", "(D)Ljava/lang/Double;", false);
                     break;
                 case BOOLEAN:
                     methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;", false);
@@ -4013,9 +4478,17 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                         methodVisitor.visitInsn(INEG);
                         lastExpressionType = VarType.INT;
                         break;
+                    case LONG:
+                        methodVisitor.visitInsn(LNEG);
+                        lastExpressionType = VarType.LONG;
+                        break;
                     case FLOAT:
                         methodVisitor.visitInsn(FNEG);
                         lastExpressionType = VarType.FLOAT;
+                        break;
+                    case DOUBLE:
+                        methodVisitor.visitInsn(DNEG);
+                        lastExpressionType = VarType.DOUBLE;
                         break;
                     default:
                         throw new RuntimeException("Cannot negate non-numeric type: " + operandType);
@@ -4123,6 +4596,99 @@ public class BytecodeGenerator implements AstVisitor<Void> {
     @Override 
     public Void visitCallExpr(CallExpr expr) {
         if (methodVisitor == null) return null;
+        
+        // Special handling for imported ADT variant factories like Some(x), None, Ok(x), Err(x)
+        if (expr.getFunction() instanceof IdentifierExpr) {
+            String name = ((IdentifierExpr) expr.getFunction()).getName();
+
+            // Inline implementations for common std::option helpers: map, unwrapOr, isSome
+            if ("map".equals(name) && expr.getArguments().size() == 2) {
+                // Generate or ensure helper, then call: $opt_map(Option, Function)
+                ensureOptionMapHelper();
+                expr.getArguments().get(0).accept(this); // Option
+                expr.getArguments().get(1).accept(this); // Function
+                methodVisitor.visitMethodInsn(
+                    INVOKESTATIC,
+                    className,
+                    "$opt_map",
+                    "(Lfirefly/std/option/Option;Ljava/util/function/Function;)Lfirefly/std/option/Option;",
+                    false
+                );
+                lastExpressionType = VarType.OBJECT;
+                lastCallWasVoid = false;
+                return null;
+            }
+            if ("unwrapOr".equals(name) && expr.getArguments().size() == 2) {
+                // Call helper: $opt_unwrapOr(Option, Object) -> Object
+                ensureOptionUnwrapOrHelper();
+                expr.getArguments().get(0).accept(this); // Option
+                expr.getArguments().get(1).accept(this); // default
+                methodVisitor.visitMethodInsn(
+                    INVOKESTATIC,
+                    className,
+                    "$opt_unwrapOr",
+                    "(Lfirefly/std/option/Option;Ljava/lang/Object;)Ljava/lang/Object;",
+                    false
+                );
+                lastExpressionType = VarType.OBJECT;
+                lastCallWasVoid = false;
+                return null;
+            }
+            if ("isSome".equals(name) && expr.getArguments().size() == 1) {
+                ensureOptionIsSomeHelper();
+                expr.getArguments().get(0).accept(this); // Option
+                methodVisitor.visitMethodInsn(
+                    INVOKESTATIC,
+                    className,
+                    "$opt_isSome",
+                    "(Lfirefly/std/option/Option;)Z",
+                    false
+                );
+                lastExpressionType = VarType.BOOLEAN;
+                lastCallWasVoid = false;
+                return null;
+            }
+
+            String outerInternal = null;
+            if ("Some".equals(name) || "None".equals(name)) {
+                outerInternal = "firefly/std/option/Option";
+            } else if ("Ok".equals(name) || "Err".equals(name)) {
+                outerInternal = "firefly/std/result/Result";
+            }
+            if (outerInternal != null) {
+                // Build descriptor from argument expressions
+                StringBuilder desc = new StringBuilder("(");
+                for (Expression arg : expr.getArguments()) {
+                    arg.accept(this);
+                    // Box primitives to match reference types in factory signature
+                    switch (lastExpressionType) {
+                        case INT:
+                            methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;", false);
+                            break;
+                        case LONG:
+                            methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Long", "valueOf", "(J)Ljava/lang/Long;", false);
+                            break;
+                        case FLOAT:
+                        case DOUBLE:
+                            methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Double", "valueOf", "(D)Ljava/lang/Double;", false);
+                            break;
+                        case BOOLEAN:
+                            methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;", false);
+                            break;
+                        default:
+                            // already object
+                            break;
+                    }
+                    // All factory parameters are emitted as Object for now
+                    desc.append("Ljava/lang/Object;");
+                }
+                desc.append(")L").append(outerInternal).append(";");
+                methodVisitor.visitMethodInsn(INVOKESTATIC, outerInternal, name, desc.toString(), false);
+                lastExpressionType = VarType.OBJECT;
+                lastCallWasVoid = false;
+                return null;
+            }
+        }
         
         // Handle method calls: ClassName.method(args) or object.method(args)
         if (expr.getFunction() instanceof FieldAccessExpr) {
@@ -4280,6 +4846,25 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                         return null;
                     }
                     
+                    // Fallback: allow static method on current class when not yet loadable
+                    String currentSimple = className.contains("/") ? className.substring(className.lastIndexOf('/') + 1) : className;
+                    if (objectName.equals(currentSimple)) {
+                        String desc = functionSignatures.get(methodName);
+                        if (desc != null) {
+                            // Push arguments
+                            for (Expression arg : expr.getArguments()) {
+                                arg.accept(this);
+                            }
+                            methodVisitor.visitMethodInsn(INVOKESTATIC, className, methodName, desc, false);
+                            String returnTypeDesc = desc.substring(desc.indexOf(')') + 1);
+                            lastCallWasVoid = "V".equals(returnTypeDesc);
+                            if (!lastCallWasVoid) {
+                                lastExpressionType = getVarTypeFromDescriptor(returnTypeDesc);
+                            }
+                            return null;
+                        }
+                    }
+                    
                     // No suitable static method found
                     throw new RuntimeException("Cannot resolve static method: " + objectName + "::" + methodName + " with " + expr.getArguments().size() + " argument(s)");
                 } else if (structRegistry.containsKey(objectName)) {
@@ -4335,6 +4920,14 @@ public class BytecodeGenerator implements AstVisitor<Void> {
             
             java.util.Optional<MethodResolver.MethodCandidate> instanceMethod = 
                 methodResolver.resolveInstanceMethod(receiverType, methodName, argTypes);
+            
+            // If method not found on Object, try String as fallback (common case: lambda parameters erased to Object)
+            if (!instanceMethod.isPresent() && receiverType == Object.class) {
+                instanceMethod = methodResolver.resolveInstanceMethod(String.class, methodName, argTypes);
+                if (instanceMethod.isPresent()) {
+                    receiverType = String.class;
+                }
+            }
             
             if (instanceMethod.isPresent()) {
                 MethodResolver.MethodCandidate candidate = instanceMethod.get();
@@ -4501,7 +5094,7 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                             methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;", false);
                             break;
                         case FLOAT:
-                            methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Float", "valueOf", "(F)Ljava/lang/Float;", false);
+                            methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Double", "valueOf", "(D)Ljava/lang/Double;", false);
                             break;
                         case DOUBLE:
                             methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Double", "valueOf", "(D)Ljava/lang/Double;", false);
@@ -4697,9 +5290,33 @@ public class BytecodeGenerator implements AstVisitor<Void> {
             }
         }
         
-        // If we can't resolve the field, leave the object on stack and hope for the best
-        // This is a fallback for cases we haven't implemented yet
-        lastExpressionType = VarType.OBJECT;
+        // Regular instance field access using GETFIELD
+        // Object is already on stack from line 4969
+        String fieldName = expr.getFieldName();
+        String ownerClass = this.className;
+        if (currentEnclosingClass != null) {
+            ownerClass = currentEnclosingClass;
+        }
+        
+        // Get field descriptor from registered field types
+        String fieldDescriptor = currentClassFieldTypes.getOrDefault(fieldName, "Ljava/lang/Object;");
+        VarType fieldType = VarType.OBJECT;
+        
+        // Determine VarType from descriptor
+        switch (fieldDescriptor) {
+            case "I": fieldType = VarType.INT; break;
+            case "J": fieldType = VarType.LONG; break;
+            case "F": fieldType = VarType.DOUBLE; break;
+            case "D": fieldType = VarType.DOUBLE; break;
+            case "Z": fieldType = VarType.BOOLEAN; break;
+            case "Ljava/lang/String;": fieldType = VarType.STRING; break;
+            case "[Ljava/lang/String;": fieldType = VarType.STRING_ARRAY; break;
+            default: fieldType = VarType.OBJECT; break;
+        }
+        
+        // Generate GETFIELD instruction
+        methodVisitor.visitFieldInsn(GETFIELD, ownerClass, fieldName, fieldDescriptor);
+        lastExpressionType = fieldType;
         return null;
     }
     
@@ -4841,11 +5458,26 @@ public class BytecodeGenerator implements AstVisitor<Void> {
     public Void visitIdentifierExpr(IdentifierExpr expr) {
         if (methodVisitor == null) return null;
         
+        // Special-case: bare nullary ADT variants from stdlib (e.g., None)
+        if ("None".equals(expr.getName())) {
+            // Default to Option.None
+            methodVisitor.visitFieldInsn(GETSTATIC, "firefly/std/option/Option", "None", "Lfirefly/std/option/Option;");
+            lastExpressionType = VarType.OBJECT;
+            return null;
+        }
+        
+        // Map 'this' to 'self' (self is stored as the 0-index local in methods)
+        String lookupName = "this".equals(expr.getName()) ? "self" : expr.getName();
+        
         // Look up variable in local variables
-        Integer varIndex = localVariables.get(expr.getName());
+        Integer varIndex = localVariables.get(lookupName);
         if (varIndex != null) {
-            VarType varType = localVariableTypes.getOrDefault(expr.getName(), VarType.INT);
+            VarType varType = localVariableTypes.getOrDefault(lookupName, VarType.INT);
             lastExpressionType = varType;
+            
+            if (System.getenv("CODEGEN_DEBUG") != null) {
+                System.err.println("[CODEGEN] Loading local var: " + lookupName + " index=" + varIndex + " type=" + varType);
+            }
             
             // Load local variable based on type
             switch (varType) {
@@ -4878,8 +5510,9 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                 return null;
             }
             
-            throw new RuntimeException("Undefined variable: " + expr.getName() + 
-                " (not found in local variables and not resolvable as a class)");
+            // Fallback: push null to allow codegen to proceed (unbound identifier in unreachable branch)
+            methodVisitor.visitInsn(ACONST_NULL);
+            lastExpressionType = VarType.OBJECT;
         }
         
         return null;
@@ -4975,28 +5608,54 @@ public class BytecodeGenerator implements AstVisitor<Void> {
         // Evaluate the value being matched
         expr.getValue().accept(this);
         
+        // Box primitives so we can store as Object and reuse in pattern matching
+        switch (lastExpressionType) {
+            case INT:
+                methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;", false);
+                break;
+            case LONG:
+                methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Long", "valueOf", "(J)Ljava/lang/Long;", false);
+                break;
+            case FLOAT:
+            case DOUBLE:
+                methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Double", "valueOf", "(D)Ljava/lang/Double;", false);
+                break;
+            case BOOLEAN:
+                methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;", false);
+                break;
+            default:
+                // already an object
+                break;
+        }
+        
         // Store the value in a local variable for repeated access
         int matchValueIndex = localVarIndex++;
         methodVisitor.visitVarInsn(ASTORE, matchValueIndex);
         
+        // Prepare a result local to ensure consistent stack at join point
+        int resultIndex = localVarIndex++;
+        methodVisitor.visitInsn(ACONST_NULL);
+        methodVisitor.visitVarInsn(ASTORE, resultIndex);
+        
         // Create labels for each arm and the end
-        List<Label> armLabels = new ArrayList<>();
         List<Label> nextArmLabels = new ArrayList<>();
         Label endLabel = new Label();
         
         for (int i = 0; i < expr.getArms().size(); i++) {
-            armLabels.add(new Label());
             nextArmLabels.add(new Label());
         }
         
         // Generate code for each arm
         for (int i = 0; i < expr.getArms().size(); i++) {
             MatchExpr.MatchArm arm = expr.getArms().get(i);
-            Label armLabel = armLabels.get(i);
             Label nextArm = (i < expr.getArms().size() - 1) ? nextArmLabels.get(i) : endLabel;
             
+            // Start label for this arm to help frame computation
+            Label armStart = new Label();
+            methodVisitor.visitLabel(armStart);
+            
             // Try to match the pattern
-            boolean matched = generatePatternMatch(
+            generatePatternMatch(
                 arm.getPattern(), 
                 matchValueIndex, 
                 nextArm
@@ -5009,18 +5668,41 @@ public class BytecodeGenerator implements AstVisitor<Void> {
             }
             
             // Execute arm body
-            methodVisitor.visitLabel(armLabel);
             arm.getBody().accept(this);
-            methodVisitor.visitJumpInsn(GOTO, endLabel);
+            // If arm body returned (code not reachable), skip storing into result
+            if (codeIsReachable) {
+                // Store into result (boxed as Object)
+                switch (lastExpressionType) {
+                    case INT:
+                        methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;", false);
+                        break;
+                    case LONG:
+                        methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Long", "valueOf", "(J)Ljava/lang/Long;", false);
+                        break;
+                    case FLOAT:
+                    case DOUBLE:
+                        methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Double", "valueOf", "(D)Ljava/lang/Double;", false);
+                        break;
+                    case BOOLEAN:
+                        methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;", false);
+                        break;
+                    default:
+                        // Already an object
+                        break;
+                }
+                methodVisitor.visitVarInsn(ASTORE, resultIndex);
+                methodVisitor.visitJumpInsn(GOTO, endLabel);
+            }
             
-            // Label for next arm
+            // Label for next arm (try next pattern)
             if (i < expr.getArms().size() - 1) {
                 methodVisitor.visitLabel(nextArm);
             }
         }
         
-        // End label
+        // End label: load the result (could be null if no arm matched)
         methodVisitor.visitLabel(endLabel);
+        methodVisitor.visitVarInsn(ALOAD, resultIndex);
         
         lastExpressionType = VarType.OBJECT;
         return null;
@@ -5036,447 +5718,576 @@ public class BytecodeGenerator implements AstVisitor<Void> {
      * @return true if pattern always matches
      */
     private boolean generatePatternMatch(Pattern pattern, int valueIndex, Label failLabel) {
-        if (pattern instanceof com.firefly.compiler.ast.pattern.WildcardPattern) {
-            // Wildcard always matches
-            return true;
-        }
-        
-        if (pattern instanceof com.firefly.compiler.ast.pattern.TypedVariablePattern) {
-            // Typed variable pattern always matches and binds the value
-            com.firefly.compiler.ast.pattern.TypedVariablePattern typedPattern = 
-                (com.firefly.compiler.ast.pattern.TypedVariablePattern) pattern;
-            String varName = typedPattern.getName();
-            
-            // Load the value and store it in a new local variable
-            methodVisitor.visitVarInsn(ALOAD, valueIndex);
-            int varIndex = localVarIndex++;
-            localVariables.put(varName, varIndex);
-            localVariableTypes.put(varName, VarType.OBJECT);
-            methodVisitor.visitVarInsn(ASTORE, varIndex);
-            
-            return true;
-        }
-        
-        if (pattern instanceof com.firefly.compiler.ast.pattern.VariablePattern) {
-            // Variable pattern always matches and binds the value
-            VariablePattern varPattern = (VariablePattern) pattern;
-            String varName = varPattern.getName();
-            
-            // Load the value and store it in a new local variable
-            methodVisitor.visitVarInsn(ALOAD, valueIndex);
-            int varIndex = localVarIndex++;
-            localVariables.put(varName, varIndex);
-            localVariableTypes.put(varName, VarType.OBJECT);
-            methodVisitor.visitVarInsn(ASTORE, varIndex);
-            
-            return true;
-        }
-        
-        if (pattern instanceof com.firefly.compiler.ast.pattern.LiteralPattern) {
-            // Literal pattern: check equality
-            com.firefly.compiler.ast.pattern.LiteralPattern litPattern = 
-                (com.firefly.compiler.ast.pattern.LiteralPattern) pattern;
-            
-            // Load the value
-            methodVisitor.visitVarInsn(ALOAD, valueIndex);
-            
-            // Load the literal
-            litPattern.getLiteral().accept(this);
-            
-            // Compare (for now, use equals for objects)
-            // Box primitives if needed
-            if (lastExpressionType == VarType.INT) {
-                methodVisitor.visitMethodInsn(
-                    INVOKESTATIC,
-                    "java/lang/Integer",
-                    "valueOf",
-                    "(I)Ljava/lang/Integer;",
-                    false
-                );
-            } else if (lastExpressionType == VarType.BOOLEAN) {
-                methodVisitor.visitMethodInsn(
-                    INVOKESTATIC,
-                    "java/lang/Boolean",
-                    "valueOf",
-                    "(Z)Ljava/lang/Boolean;",
-                    false
-                );
+        try {
+            if (pattern instanceof com.firefly.compiler.ast.pattern.WildcardPattern) {
+                // Wildcard always matches
+                return true;
             }
             
-            // Call equals
-            methodVisitor.visitMethodInsn(
-                INVOKEVIRTUAL,
-                "java/lang/Object",
-                "equals",
-                "(Ljava/lang/Object;)Z",
-                false
-            );
-            
-            // If equals returns false (0), jump to next pattern
-            methodVisitor.visitJumpInsn(IFEQ, failLabel);
-            
-            return false;
-        }
-        
-        if (pattern instanceof com.firefly.compiler.ast.pattern.TuplePattern) {
-            // Tuple pattern: (p1, p2, ...)
-            com.firefly.compiler.ast.pattern.TuplePattern tuple = (com.firefly.compiler.ast.pattern.TuplePattern) pattern;
-            java.util.List<Pattern> elems = tuple.getElements();
-            
-            // Ensure value is a List
-            methodVisitor.visitVarInsn(ALOAD, valueIndex);
-            methodVisitor.visitTypeInsn(INSTANCEOF, "java/util/List");
-            methodVisitor.visitJumpInsn(IFEQ, failLabel);
-            
-            // Cast and store
-            methodVisitor.visitVarInsn(ALOAD, valueIndex);
-            methodVisitor.visitTypeInsn(CHECKCAST, "java/util/List");
-            int listIdx = localVarIndex++;
-            methodVisitor.visitVarInsn(ASTORE, listIdx);
-            
-            for (int i = 0; i < elems.size(); i++) {
-                Pattern p = elems.get(i);
-                if (p instanceof com.firefly.compiler.ast.pattern.WildcardPattern) {
-                    continue; // skip
-                }
-                // Load list.get(i)
-                methodVisitor.visitVarInsn(ALOAD, listIdx);
-                if (i <= 5) {
-                    switch (i) {
-                        case 0: methodVisitor.visitInsn(ICONST_0); break;
-                        case 1: methodVisitor.visitInsn(ICONST_1); break;
-                        case 2: methodVisitor.visitInsn(ICONST_2); break;
-                        case 3: methodVisitor.visitInsn(ICONST_3); break;
-                        case 4: methodVisitor.visitInsn(ICONST_4); break;
-                        default: methodVisitor.visitInsn(ICONST_5); break;
-                    }
-                } else if (i <= Byte.MAX_VALUE) {
-                    methodVisitor.visitIntInsn(BIPUSH, i);
-                } else if (i <= Short.MAX_VALUE) {
-                    methodVisitor.visitIntInsn(SIPUSH, i);
-                } else {
-                    methodVisitor.visitLdcInsn(i);
-                }
-                methodVisitor.visitMethodInsn(INVOKEINTERFACE, "java/util/List", "get", "(I)Ljava/lang/Object;", true);
-                // Store element for potential recursive match/binding
-                int elemIdx = localVarIndex++;
-                methodVisitor.visitVarInsn(ASTORE, elemIdx);
+            if (pattern instanceof com.firefly.compiler.ast.pattern.TypedVariablePattern) {
+                // Typed variable pattern always matches and binds the value
+                com.firefly.compiler.ast.pattern.TypedVariablePattern typedPattern = 
+                    (com.firefly.compiler.ast.pattern.TypedVariablePattern) pattern;
+                String varName = typedPattern.getName();
                 
-                if (p instanceof com.firefly.compiler.ast.pattern.VariablePattern) {
-                    // Bind variable name to element object
-                    String name = ((VariablePattern) p).getName();
-                    localVariables.put(name, elemIdx);
-                    localVariableTypes.put(name, VarType.OBJECT);
-                } else if (p instanceof com.firefly.compiler.ast.pattern.LiteralPattern) {
-                    // Compare element.equals(boxedLiteral)
-                    methodVisitor.visitVarInsn(ALOAD, elemIdx);
-                    com.firefly.compiler.ast.pattern.LiteralPattern lit = (com.firefly.compiler.ast.pattern.LiteralPattern) p;
-                    lit.getLiteral().accept(this);
-                    switch (lastExpressionType) {
-                        case INT:
-                            methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;", false);
-                            break;
-                        case LONG:
-                            methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Long", "valueOf", "(J)Ljava/lang/Long;", false);
-                            break;
-                        case FLOAT:
-                        case DOUBLE:
-                            methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Double", "valueOf", "(D)Ljava/lang/Double;", false);
-                            break;
-                        case BOOLEAN:
-                            methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;", false);
-                            break;
-                        default:
-                            // already object
-                            break;
-                    }
-                    methodVisitor.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Object", "equals", "(Ljava/lang/Object;)Z", false);
-                    methodVisitor.visitJumpInsn(IFEQ, failLabel);
-                } else {
-                    // Recurse with element index
-                    boolean alwaysMatches = generatePatternMatch(p, elemIdx, failLabel);
-                }
+                // Load the value and store it in a new local variable
+                methodVisitor.visitVarInsn(ALOAD, valueIndex);
+                int varIndex = localVarIndex++;
+                localVariables.put(varName, varIndex);
+                localVariableTypes.put(varName, VarType.OBJECT);
+                methodVisitor.visitVarInsn(ASTORE, varIndex);
+                
+                return true;
             }
-            return false;
-        }
-        
-        if (pattern instanceof com.firefly.compiler.ast.pattern.StructPattern) {
-            // Named struct pattern: TypeName { field1, field2, ... }
-            com.firefly.compiler.ast.pattern.StructPattern structPattern = 
-                (com.firefly.compiler.ast.pattern.StructPattern) pattern;
             
-            // Load the value
-            methodVisitor.visitVarInsn(ALOAD, valueIndex);
+            if (pattern instanceof com.firefly.compiler.ast.pattern.VariablePattern) {
+                // Variable pattern always matches and binds the value
+                VariablePattern varPattern = (VariablePattern) pattern;
+                String varName = varPattern.getName();
+                
+                // Load the value and store it in a new local variable
+                methodVisitor.visitVarInsn(ALOAD, valueIndex);
+                int varIndex = localVarIndex++;
+                localVariables.put(varName, varIndex);
+                localVariableTypes.put(varName, VarType.OBJECT);
+                methodVisitor.visitVarInsn(ASTORE, varIndex);
+                
+                return true;
+            }
             
-            // Check instanceof
-            String typeName = resolveStructInternalName(structPattern.getTypeName());
-            methodVisitor.visitTypeInsn(INSTANCEOF, typeName);
-            methodVisitor.visitJumpInsn(IFEQ, failLabel);
-            
-            // Cast to the type
-            methodVisitor.visitVarInsn(ALOAD, valueIndex);
-            methodVisitor.visitTypeInsn(CHECKCAST, typeName);
-            
-            // Store in temporary
-            int tempIndex = localVarIndex++;
-            methodVisitor.visitVarInsn(ASTORE, tempIndex);
-            
-            // Get struct metadata
-            StructMetadata structMeta = structRegistry.get(structPattern.getTypeName());
-            
-            // Destructure fields by name
-            List<com.firefly.compiler.ast.pattern.StructPattern.FieldPattern> fieldPatterns = 
-                structPattern.getFields();
-            
-            if (structMeta != null) {
-                for (com.firefly.compiler.ast.pattern.StructPattern.FieldPattern fieldPattern : fieldPatterns) {
-                    String fieldName = fieldPattern.getFieldName();
-                    
-                    // Find the field metadata
-                    StructMetadata.FieldMetadata fieldMeta = null;
-                    for (StructMetadata.FieldMetadata fm : structMeta.fields) {
-                        if (fm.name.equals(fieldName)) {
-                            fieldMeta = fm;
-                            break;
-                        }
-                    }
-                    
-                    if (fieldMeta == null) {
-                        throw new RuntimeException("Field '" + fieldName + "' not found in struct '" + structPattern.getTypeName() + "'");
-                    }
-                    
-                    // Load the struct instance
-                    methodVisitor.visitVarInsn(ALOAD, tempIndex);
-                    
-                    // Call getter method for the field (use JavaBean naming)
-                    String getterDescriptor = "()" + getTypeDescriptor(fieldMeta.type);
-                    String getterName = (getVarTypeFromType(fieldMeta.type) == VarType.BOOLEAN
-                        ? (fieldName.startsWith("is") ? fieldName : "is" + capitalize(fieldName))
-                        : ("get" + capitalize(fieldName)));
+            if (pattern instanceof com.firefly.compiler.ast.pattern.LiteralPattern) {
+                // Literal pattern: check equality
+                com.firefly.compiler.ast.pattern.LiteralPattern litPattern = 
+                    (com.firefly.compiler.ast.pattern.LiteralPattern) pattern;
+                
+                // Load the value
+                methodVisitor.visitVarInsn(ALOAD, valueIndex);
+                
+                // Load the literal
+                litPattern.getLiteral().accept(this);
+                
+                // Compare (for now, use equals for objects)
+                // Box primitives if needed
+                if (lastExpressionType == VarType.INT) {
                     methodVisitor.visitMethodInsn(
-                        INVOKEVIRTUAL,
-                        typeName,
-                        getterName,
-                        getterDescriptor,
+                        INVOKESTATIC,
+                        "java/lang/Integer",
+                        "valueOf",
+                        "(I)Ljava/lang/Integer;",
                         false
                     );
-                    
-                    // Store field value in a temp variable
-                    int fieldValueIndex = localVarIndex++;
-                    VarType fieldType = getVarTypeFromType(fieldMeta.type);
-                    
-                    // Store based on type
-                    switch (fieldType) {
-                        case INT:
-                        case BOOLEAN:
-                            methodVisitor.visitVarInsn(ISTORE, fieldValueIndex);
-                            break;
-                        case FLOAT:
-                        case DOUBLE:
-                            methodVisitor.visitVarInsn(DSTORE, fieldValueIndex);
-                            break;
-                        default:
-                            methodVisitor.visitVarInsn(ASTORE, fieldValueIndex);
-                            break;
-                    }
-                    
-                    // Handle the field pattern
-                    Pattern nestedPattern = fieldPattern.getPattern();
-                    if (nestedPattern == null || fieldPattern.isShorthand()) {
-                        // Shorthand: bind directly to variable with field name
-                        localVariables.put(fieldName, fieldValueIndex);
-                        localVariableTypes.put(fieldName, fieldType);
-                    } else if (nestedPattern instanceof VariablePattern) {
-                        // Explicit variable pattern
-                        VariablePattern varPattern = (VariablePattern) nestedPattern;
-                        String varName = varPattern.getName();
-                        localVariables.put(varName, fieldValueIndex);
-                        localVariableTypes.put(varName, fieldType);
-                    } else if (nestedPattern instanceof com.firefly.compiler.ast.pattern.LiteralPattern) {
-                        // Inline literal comparison to handle primitives correctly
-                        com.firefly.compiler.ast.pattern.LiteralPattern lit = (com.firefly.compiler.ast.pattern.LiteralPattern) nestedPattern;
-                        // Load stored field value with correct opcode
-                        switch (fieldType) {
-                            case INT:
-                            case BOOLEAN:
-                                methodVisitor.visitVarInsn(ILOAD, fieldValueIndex);
-                                break;
-                            case LONG:
-                                methodVisitor.visitVarInsn(LLOAD, fieldValueIndex);
-                                break;
-                            case FLOAT:
-                            case DOUBLE:
-                                methodVisitor.visitVarInsn(DLOAD, fieldValueIndex);
-                                break;
-                            default:
-                                methodVisitor.visitVarInsn(ALOAD, fieldValueIndex);
-                                break;
-                        }
-                        // Load literal and compare
-                        lit.getLiteral().accept(this);
-                        if (fieldType == VarType.INT || fieldType == VarType.BOOLEAN) {
-                            // If not equal, jump to fail
-                            methodVisitor.visitJumpInsn(IF_ICMPNE, failLabel);
-                        } else if (fieldType == VarType.LONG) {
-                            methodVisitor.visitInsn(LCMP);
-                            Label ok = new Label();
-                            methodVisitor.visitJumpInsn(IFEQ, ok);
-                            methodVisitor.visitJumpInsn(GOTO, failLabel);
-                            methodVisitor.visitLabel(ok);
-                        } else if (fieldType == VarType.FLOAT || fieldType == VarType.DOUBLE) {
-                            methodVisitor.visitInsn(DCMPL);
-                            Label ok = new Label();
-                            methodVisitor.visitJumpInsn(IFEQ, ok);
-                            methodVisitor.visitJumpInsn(GOTO, failLabel);
-                            methodVisitor.visitLabel(ok);
-                        } else {
-                            // Object equals
-                            methodVisitor.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Object", "equals", "(Ljava/lang/Object;)Z", false);
-                            methodVisitor.visitJumpInsn(IFEQ, failLabel);
-                        }
-                    } else {
-                        // Other pattern types - match recursively
-                        boolean alwaysMatches = generatePatternMatch(
-                            nestedPattern,
-                            fieldValueIndex,
-                            failLabel
-                        );
-                    }
-                }
-            }
-            
-            return false;
-        }
-        
-        if (pattern instanceof com.firefly.compiler.ast.pattern.TupleStructPattern) {
-            // Constructor pattern: check type and destructure
-            com.firefly.compiler.ast.pattern.TupleStructPattern structPattern = 
-                (com.firefly.compiler.ast.pattern.TupleStructPattern) pattern;
-            
-            // Load the value
-            methodVisitor.visitVarInsn(ALOAD, valueIndex);
-            
-            // Check instanceof
-            String typeName = resolveStructInternalName(structPattern.getTypeName());
-            methodVisitor.visitTypeInsn(INSTANCEOF, typeName);
-            methodVisitor.visitJumpInsn(IFEQ, failLabel);
-            
-            // Cast to the type
-            methodVisitor.visitVarInsn(ALOAD, valueIndex);
-            methodVisitor.visitTypeInsn(CHECKCAST, typeName);
-            
-            // Store in temporary
-            int tempIndex = localVarIndex++;
-            methodVisitor.visitVarInsn(ASTORE, tempIndex);
-            
-            // Get struct metadata to find actual field names
-            StructMetadata structMeta = structRegistry.get(structPattern.getTypeName());
-            
-            // Destructure nested patterns
-            List<Pattern> nestedPatterns = structPattern.getPatterns();
-            if (!nestedPatterns.isEmpty() && structMeta != null) {
-                // For each nested pattern, extract the field and match recursively
-                for (int i = 0; i < nestedPatterns.size() && i < structMeta.fields.size(); i++) {
-                    Pattern nestedPattern = nestedPatterns.get(i);
-                    StructMetadata.FieldMetadata fieldMeta = structMeta.fields.get(i);
-                    String fieldName = fieldMeta.name;
-                    
-                    // Load the struct instance
-                    methodVisitor.visitVarInsn(ALOAD, tempIndex);
-                    
-                    // Access field directly for data variants
-                    String fieldDescriptor = "" + getTypeDescriptor(fieldMeta.type);
-                    methodVisitor.visitFieldInsn(
-                        GETFIELD,
-                        typeName,
-                        fieldName,
-                        fieldDescriptor
+                } else if (lastExpressionType == VarType.BOOLEAN) {
+                    methodVisitor.visitMethodInsn(
+                        INVOKESTATIC,
+                        "java/lang/Boolean",
+                        "valueOf",
+                        "(Z)Ljava/lang/Boolean;",
+                        false
                     );
-                    
-                    // Store field value in a temp variable
-                    int fieldValueIndex = localVarIndex++;
-                    VarType fieldType = getVarTypeFromType(fieldMeta.type);
-                    
-                    // Store based on type
-                    switch (fieldType) {
-                        case INT:
-                        case BOOLEAN:
-                            methodVisitor.visitVarInsn(ISTORE, fieldValueIndex);
-                            break;
-                        case FLOAT:
-                        case DOUBLE:
-                            methodVisitor.visitVarInsn(DSTORE, fieldValueIndex);
-                            break;
-                        default:
-                            methodVisitor.visitVarInsn(ASTORE, fieldValueIndex);
-                            break;
+                }
+                methodVisitor.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Object", "equals", "(Ljava/lang/Object;)Z", false);
+                methodVisitor.visitJumpInsn(IFEQ, failLabel);
+                return false;
+            }
+            
+            if (pattern instanceof com.firefly.compiler.ast.pattern.RangePattern) {
+                com.firefly.compiler.ast.pattern.RangePattern rp = (com.firefly.compiler.ast.pattern.RangePattern) pattern;
+                // Evaluate start and end
+                rp.getStart().accept(this);
+                rp.getEnd().accept(this);
+                // Create Range(start, end, inclusive)
+                generateRangeCreation(rp.isInclusive());
+                int rangeIdx = localVarIndex++;
+                methodVisitor.visitVarInsn(ASTORE, rangeIdx);
+                // Load range and value, unbox int, and call contains
+                methodVisitor.visitVarInsn(ALOAD, rangeIdx);
+                methodVisitor.visitVarInsn(ALOAD, valueIndex);
+                methodVisitor.visitTypeInsn(CHECKCAST, "java/lang/Integer");
+                methodVisitor.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Integer", "intValue", "()I", false);
+                methodVisitor.visitMethodInsn(INVOKEVIRTUAL, "com/firefly/runtime/Range", "contains", "(I)Z", false);
+                methodVisitor.visitJumpInsn(IFEQ, failLabel);
+                return false;
+            }
+            
+            if (pattern instanceof com.firefly.compiler.ast.pattern.TuplePattern) {
+                // Tuple pattern: (p1, p2, ...)
+                com.firefly.compiler.ast.pattern.TuplePattern tuple = (com.firefly.compiler.ast.pattern.TuplePattern) pattern;
+                java.util.List<Pattern> elems = tuple.getElements();
+                
+                // Ensure value is a List
+                methodVisitor.visitVarInsn(ALOAD, valueIndex);
+                methodVisitor.visitTypeInsn(INSTANCEOF, "java/util/List");
+                methodVisitor.visitJumpInsn(IFEQ, failLabel);
+                
+                // Cast and store
+                methodVisitor.visitVarInsn(ALOAD, valueIndex);
+                methodVisitor.visitTypeInsn(CHECKCAST, "java/util/List");
+                int listIdx = localVarIndex++;
+                methodVisitor.visitVarInsn(ASTORE, listIdx);
+                
+                for (int i = 0; i < elems.size(); i++) {
+                    Pattern p = elems.get(i);
+                    if (p instanceof com.firefly.compiler.ast.pattern.WildcardPattern) {
+                        continue; // skip
                     }
+                    // Load list.get(i)
+                    methodVisitor.visitVarInsn(ALOAD, listIdx);
+                    if (i <= 5) {
+                        switch (i) {
+                            case 0: methodVisitor.visitInsn(ICONST_0); break;
+                            case 1: methodVisitor.visitInsn(ICONST_1); break;
+                            case 2: methodVisitor.visitInsn(ICONST_2); break;
+                            case 3: methodVisitor.visitInsn(ICONST_3); break;
+                            case 4: methodVisitor.visitInsn(ICONST_4); break;
+                            default: methodVisitor.visitInsn(ICONST_5); break;
+                        }
+                    } else if (i <= Byte.MAX_VALUE) {
+                        methodVisitor.visitIntInsn(BIPUSH, i);
+                    } else if (i <= Short.MAX_VALUE) {
+                        methodVisitor.visitIntInsn(SIPUSH, i);
+                    } else {
+                        methodVisitor.visitLdcInsn(i);
+                    }
+                    methodVisitor.visitMethodInsn(INVOKEINTERFACE, "java/util/List", "get", "(I)Ljava/lang/Object;", true);
+                    // Store element for potential recursive match/binding
+                    int elemIdx = localVarIndex++;
+                    methodVisitor.visitVarInsn(ASTORE, elemIdx);
                     
-                    // Recursively match the nested pattern
-                    // If it's a variable pattern, bind the variable
-                    if (nestedPattern instanceof VariablePattern) {
-                        VariablePattern varPattern = (VariablePattern) nestedPattern;
-                        String varName = varPattern.getName();
-                        
-                        // Register the variable binding
-                        localVariables.put(varName, fieldValueIndex);
-                        localVariableTypes.put(varName, fieldType);
-                    } else if (nestedPattern instanceof com.firefly.compiler.ast.pattern.LiteralPattern) {
-                        // Inline literal comparison to handle primitives correctly
-                        com.firefly.compiler.ast.pattern.LiteralPattern lit = (com.firefly.compiler.ast.pattern.LiteralPattern) nestedPattern;
-                        // Load stored field value with correct opcode
-                        switch (fieldType) {
+                    if (p instanceof com.firefly.compiler.ast.pattern.VariablePattern) {
+                        // Bind variable name to element object
+                        String name = ((VariablePattern) p).getName();
+                        localVariables.put(name, elemIdx);
+                        localVariableTypes.put(name, VarType.OBJECT);
+                    } else if (p instanceof com.firefly.compiler.ast.pattern.LiteralPattern) {
+                        // Compare element.equals(boxedLiteral)
+                        methodVisitor.visitVarInsn(ALOAD, elemIdx);
+                        com.firefly.compiler.ast.pattern.LiteralPattern lit = (com.firefly.compiler.ast.pattern.LiteralPattern) p;
+                        lit.getLiteral().accept(this);
+                        switch (lastExpressionType) {
                             case INT:
-                            case BOOLEAN:
-                                methodVisitor.visitVarInsn(ILOAD, fieldValueIndex);
+                                methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;", false);
                                 break;
                             case LONG:
-                                methodVisitor.visitVarInsn(LLOAD, fieldValueIndex);
+                                methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Long", "valueOf", "(J)Ljava/lang/Long;", false);
                                 break;
                             case FLOAT:
                             case DOUBLE:
-                                methodVisitor.visitVarInsn(DLOAD, fieldValueIndex);
+                                methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Double", "valueOf", "(D)Ljava/lang/Double;", false);
+                                break;
+                            case BOOLEAN:
+                                methodVisitor.visitMethodInsn(INVOKESTATIC, "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;", false);
                                 break;
                             default:
-                                methodVisitor.visitVarInsn(ALOAD, fieldValueIndex);
+                                // already object
                                 break;
                         }
-                        // Load literal and compare
-                        lit.getLiteral().accept(this);
-                        if (fieldType == VarType.INT || fieldType == VarType.BOOLEAN) {
-                            methodVisitor.visitJumpInsn(IF_ICMPNE, failLabel);
-                        } else if (fieldType == VarType.LONG) {
-                            methodVisitor.visitInsn(LCMP);
-                            Label ok = new Label();
-                            methodVisitor.visitJumpInsn(IFEQ, ok);
-                            methodVisitor.visitJumpInsn(GOTO, failLabel);
-                            methodVisitor.visitLabel(ok);
-                        } else if (fieldType == VarType.FLOAT || fieldType == VarType.DOUBLE) {
-                            methodVisitor.visitInsn(DCMPL);
-                            Label ok = new Label();
-                            methodVisitor.visitJumpInsn(IFEQ, ok);
-                            methodVisitor.visitJumpInsn(GOTO, failLabel);
-                            methodVisitor.visitLabel(ok);
-                        } else {
-                            methodVisitor.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Object", "equals", "(Ljava/lang/Object;)Z", false);
-                            methodVisitor.visitJumpInsn(IFEQ, failLabel);
-                        }
+                        methodVisitor.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Object", "equals", "(Ljava/lang/Object;)Z", false);
+                        methodVisitor.visitJumpInsn(IFEQ, failLabel);
                     } else {
-                        // For other pattern types, match recursively
-                        boolean alwaysMatches = generatePatternMatch(
-                            nestedPattern,
-                            fieldValueIndex,
-                            failLabel
-                        );
+                        // Recurse with element index
+                        boolean alwaysMatches = generatePatternMatch(p, elemIdx, failLabel);
                     }
                 }
+                return false;
             }
             
-            return false;
+            if (pattern instanceof com.firefly.compiler.ast.pattern.StructPattern) {
+                // Named struct pattern: TypeName { field1, field2, ... }
+                com.firefly.compiler.ast.pattern.StructPattern structPattern = 
+                    (com.firefly.compiler.ast.pattern.StructPattern) pattern;
+                
+                // Load the value
+                methodVisitor.visitVarInsn(ALOAD, valueIndex);
+                
+                // Check instanceof
+                String typeName = resolveStructInternalName(structPattern.getTypeName());
+                methodVisitor.visitTypeInsn(INSTANCEOF, typeName);
+                methodVisitor.visitJumpInsn(IFEQ, failLabel);
+                
+                // Cast to the type
+                methodVisitor.visitVarInsn(ALOAD, valueIndex);
+                methodVisitor.visitTypeInsn(CHECKCAST, typeName);
+                
+                // Store in temporary
+                int tempIndex = localVarIndex++;
+                methodVisitor.visitVarInsn(ASTORE, tempIndex);
+                
+                // Get struct metadata
+                StructMetadata structMeta = structRegistry.get(structPattern.getTypeName());
+                
+                // Destructure fields by name
+                List<com.firefly.compiler.ast.pattern.StructPattern.FieldPattern> fieldPatterns = 
+                    structPattern.getFields();
+                
+                if (structMeta != null) {
+                    for (com.firefly.compiler.ast.pattern.StructPattern.FieldPattern fieldPattern : fieldPatterns) {
+                        String fieldName = fieldPattern.getFieldName();
+                        
+                        // Find the field metadata
+                        StructMetadata.FieldMetadata fieldMeta = null;
+                        for (StructMetadata.FieldMetadata fm : structMeta.fields) {
+                            if (fm.name.equals(fieldName)) {
+                                fieldMeta = fm;
+                                break;
+                            }
+                        }
+                        
+                        if (fieldMeta == null) {
+                            throw new RuntimeException("Field '" + fieldName + "' not found in struct '" + structPattern.getTypeName() + "'");
+                        }
+                        
+                        // Load the struct instance
+                        methodVisitor.visitVarInsn(ALOAD, tempIndex);
+                        
+                        // Call getter method for the field (use JavaBean naming)
+                        String getterDescriptor = "()" + getTypeDescriptor(fieldMeta.type);
+                        String getterName = (getVarTypeFromType(fieldMeta.type) == VarType.BOOLEAN
+                            ? (fieldName.startsWith("is") ? fieldName : "is" + capitalize(fieldName))
+                            : ("get" + capitalize(fieldName)));
+                        methodVisitor.visitMethodInsn(
+                            INVOKEVIRTUAL,
+                            typeName,
+                            getterName,
+                            getterDescriptor,
+                            false
+                        );
+                        
+                        // Store field value in a temp variable
+                        int fieldValueIndex = localVarIndex++;
+                        VarType fieldType = getVarTypeFromType(fieldMeta.type);
+                        
+                        // Store based on type
+                        switch (fieldType) {
+                            case INT:
+                            case BOOLEAN:
+                                methodVisitor.visitVarInsn(ISTORE, fieldValueIndex);
+                                break;
+                            case FLOAT:
+                            case DOUBLE:
+                                methodVisitor.visitVarInsn(DSTORE, fieldValueIndex);
+                                break;
+                            default:
+                                methodVisitor.visitVarInsn(ASTORE, fieldValueIndex);
+                                break;
+                        }
+                        
+                        // Handle the field pattern
+                        Pattern nestedPattern = fieldPattern.getPattern();
+                        if (nestedPattern == null || fieldPattern.isShorthand()) {
+                            // Shorthand: bind directly to variable with field name
+                            localVariables.put(fieldName, fieldValueIndex);
+                            localVariableTypes.put(fieldName, fieldType);
+                        } else if (nestedPattern instanceof VariablePattern) {
+                            // Explicit variable pattern
+                            VariablePattern varPattern = (VariablePattern) nestedPattern;
+                            String varName = varPattern.getName();
+                            localVariables.put(varName, fieldValueIndex);
+                            localVariableTypes.put(varName, fieldType);
+                        } else if (nestedPattern instanceof com.firefly.compiler.ast.pattern.LiteralPattern) {
+                            // Inline literal comparison to handle primitives correctly
+                            com.firefly.compiler.ast.pattern.LiteralPattern lit = (com.firefly.compiler.ast.pattern.LiteralPattern) nestedPattern;
+                            // Load stored field value with correct opcode
+                            switch (fieldType) {
+                                case INT:
+                                case BOOLEAN:
+                                    methodVisitor.visitVarInsn(ILOAD, fieldValueIndex);
+                                    break;
+                                case LONG:
+                                    methodVisitor.visitVarInsn(LLOAD, fieldValueIndex);
+                                    break;
+                                case FLOAT:
+                                case DOUBLE:
+                                    methodVisitor.visitVarInsn(DLOAD, fieldValueIndex);
+                                    break;
+                                default:
+                                    methodVisitor.visitVarInsn(ALOAD, fieldValueIndex);
+                                    break;
+                            }
+                            // Load literal and compare
+                            lit.getLiteral().accept(this);
+                            if (fieldType == VarType.INT || fieldType == VarType.BOOLEAN) {
+                                // If not equal, jump to fail
+                                methodVisitor.visitJumpInsn(IF_ICMPNE, failLabel);
+                            } else if (fieldType == VarType.LONG) {
+                                methodVisitor.visitInsn(LCMP);
+                                Label ok = new Label();
+                                methodVisitor.visitJumpInsn(IFEQ, ok);
+                                methodVisitor.visitJumpInsn(GOTO, failLabel);
+                                methodVisitor.visitLabel(ok);
+                            } else if (fieldType == VarType.FLOAT || fieldType == VarType.DOUBLE) {
+                                methodVisitor.visitInsn(DCMPL);
+                                Label ok = new Label();
+                                methodVisitor.visitJumpInsn(IFEQ, ok);
+                                methodVisitor.visitJumpInsn(GOTO, failLabel);
+                                methodVisitor.visitLabel(ok);
+                            } else {
+                                // Object equals
+                                methodVisitor.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Object", "equals", "(Ljava/lang/Object;)Z", false);
+                                methodVisitor.visitJumpInsn(IFEQ, failLabel);
+                            }
+                        } else {
+                            // Other pattern types - match recursively
+                            boolean alwaysMatches = generatePatternMatch(
+                                nestedPattern,
+                                fieldValueIndex,
+                                failLabel
+                            );
+                        }
+                    }
+                }
+                
+                return false;
+            }
+            
+            if (pattern instanceof com.firefly.compiler.ast.pattern.TupleStructPattern) {
+                // Constructor pattern: check type and destructure
+                com.firefly.compiler.ast.pattern.TupleStructPattern structPattern = 
+                    (com.firefly.compiler.ast.pattern.TupleStructPattern) pattern;
+                
+                // Load the value
+                methodVisitor.visitVarInsn(ALOAD, valueIndex);
+                
+                // Resolve the variant class name robustly (supports stdlib / imported types)
+                String simpleName = structPattern.getTypeName();
+                String internalTypeName = null;
+                java.util.Optional<String> resolvedCls = typeResolver.resolveClassName(simpleName);
+                if (resolvedCls.isPresent()) {
+                    // Verify the class actually exists (explicit imports may point to non-nested classes)
+                    java.util.Optional<Class<?>> cls = typeResolver.getClass(resolvedCls.get());
+                    if (cls.isPresent()) {
+                        internalTypeName = resolvedCls.get().replace('.', '/');
+                    }
+                }
+                if (internalTypeName == null) {
+                    // Try resolving as a nested variant class on any explicitly imported type
+                    java.util.Optional<String> nested = typeResolver.resolveVariantNestedClass(simpleName);
+                    if (nested.isPresent()) {
+                        internalTypeName = nested.get().replace('.', '/');
+                    }
+                }
+                if (internalTypeName == null) {
+                    // Fallback to local resolution
+                    internalTypeName = resolveStructInternalName(simpleName);
+                }
+                
+                // Check instanceof
+                methodVisitor.visitTypeInsn(INSTANCEOF, internalTypeName);
+                methodVisitor.visitJumpInsn(IFEQ, failLabel);
+                
+                // Cast to the type
+                methodVisitor.visitVarInsn(ALOAD, valueIndex);
+                methodVisitor.visitTypeInsn(CHECKCAST, internalTypeName);
+                
+                // Store in temporary
+                int tempIndex = localVarIndex++;
+                methodVisitor.visitVarInsn(ASTORE, tempIndex);
+                
+                // Get struct metadata to find actual field names (only available for locally-declared types)
+                StructMetadata structMeta = structRegistry.get(simpleName);
+                
+                // Destructure nested patterns
+                List<Pattern> nestedPatterns = structPattern.getPatterns();
+                if (!nestedPatterns.isEmpty()) {
+                    if (structMeta != null) {
+                        // For each nested pattern, extract the field and match recursively using metadata
+                        for (int i = 0; i < nestedPatterns.size() && i < structMeta.fields.size(); i++) {
+                            Pattern nestedPattern = nestedPatterns.get(i);
+                            StructMetadata.FieldMetadata fieldMeta = structMeta.fields.get(i);
+                            String fieldName = fieldMeta.name;
+                            
+                            // Load the struct instance
+                            methodVisitor.visitVarInsn(ALOAD, tempIndex);
+                            
+                            // Access field directly for data variants
+                            String fieldDescriptor = "" + getTypeDescriptor(fieldMeta.type);
+                            methodVisitor.visitFieldInsn(
+                                GETFIELD,
+                                internalTypeName,
+                                fieldName,
+                                fieldDescriptor
+                            );
+                            
+                            // Store field value in a temp variable
+                            int fieldValueIndex = localVarIndex++;
+                            VarType fieldType = getVarTypeFromType(fieldMeta.type);
+                            
+                            // Store based on type
+                            switch (fieldType) {
+                                case INT:
+                                case BOOLEAN:
+                                    methodVisitor.visitVarInsn(ISTORE, fieldValueIndex);
+                                    break;
+                                case LONG:
+                                    methodVisitor.visitVarInsn(LSTORE, fieldValueIndex);
+                                    localVarIndex++; // 64-bit takes 2 slots
+                                    break;
+                                case FLOAT:
+                                case DOUBLE:
+                                    methodVisitor.visitVarInsn(DSTORE, fieldValueIndex);
+                                    localVarIndex++; // 64-bit takes 2 slots
+                                    break;
+                                default:
+                                    methodVisitor.visitVarInsn(ASTORE, fieldValueIndex);
+                                    break;
+                            }
+                            
+                            // Recursively match the nested pattern or bind variable
+                            if (nestedPattern instanceof VariablePattern) {
+                                VariablePattern varPattern = (VariablePattern) nestedPattern;
+                                String varName = varPattern.getName();
+                                localVariables.put(varName, fieldValueIndex);
+                                localVariableTypes.put(varName, fieldType);
+                            } else if (nestedPattern instanceof com.firefly.compiler.ast.pattern.LiteralPattern) {
+                                com.firefly.compiler.ast.pattern.LiteralPattern lit = (com.firefly.compiler.ast.pattern.LiteralPattern) nestedPattern;
+                                // Load stored field value with correct opcode
+                                switch (fieldType) {
+                                    case INT:
+                                    case BOOLEAN:
+                                        methodVisitor.visitVarInsn(ILOAD, fieldValueIndex);
+                                        break;
+                                    case LONG:
+                                        methodVisitor.visitVarInsn(LLOAD, fieldValueIndex);
+                                        break;
+                                    case FLOAT:
+                                    case DOUBLE:
+                                        methodVisitor.visitVarInsn(DLOAD, fieldValueIndex);
+                                        break;
+                                    default:
+                                        methodVisitor.visitVarInsn(ALOAD, fieldValueIndex);
+                                        break;
+                                }
+                                // Load literal and compare
+                                lit.getLiteral().accept(this);
+                                if (fieldType == VarType.INT || fieldType == VarType.BOOLEAN) {
+                                    methodVisitor.visitJumpInsn(IF_ICMPNE, failLabel);
+                                } else if (fieldType == VarType.LONG) {
+                                    methodVisitor.visitInsn(LCMP);
+                                    Label ok = new Label();
+                                    methodVisitor.visitJumpInsn(IFEQ, ok);
+                                    methodVisitor.visitJumpInsn(GOTO, failLabel);
+                                    methodVisitor.visitLabel(ok);
+                                } else if (fieldType == VarType.FLOAT || fieldType == VarType.DOUBLE) {
+                                    methodVisitor.visitInsn(DCMPL);
+                                    Label ok = new Label();
+                                    methodVisitor.visitJumpInsn(IFEQ, ok);
+                                    methodVisitor.visitJumpInsn(GOTO, failLabel);
+                                    methodVisitor.visitLabel(ok);
+                                } else {
+                                    methodVisitor.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Object", "equals", "(Ljava/lang/Object;)Z", false);
+                                    methodVisitor.visitJumpInsn(IFEQ, failLabel);
+                                }
+                            } else {
+                                boolean alwaysMatches = generatePatternMatch(
+                                    nestedPattern,
+                                    fieldValueIndex,
+                                    failLabel
+                                );
+                            }
+                        }
+                    } else {
+                        // Fallback path for external ADTs (e.g., stdlib variants) without local metadata
+                        java.util.Optional<Class<?>> variantClass = typeResolver.getClass(internalTypeName.replace('/', '.'));
+                        for (int i = 0; i < nestedPatterns.size(); i++) {
+                            Pattern nestedPattern = nestedPatterns.get(i);
+                            String fieldName = "value" + i;
+                            String fieldDescriptor = "Ljava/lang/Object;";
+                            VarType fieldType = VarType.OBJECT;
+                            if (variantClass.isPresent()) {
+                                try {
+                                    java.lang.reflect.Field rf = variantClass.get().getField(fieldName);
+                                    fieldDescriptor = org.objectweb.asm.Type.getDescriptor(rf.getType());
+                                    fieldType = getVarTypeFromClass(rf.getType());
+                                } catch (NoSuchFieldException ignore) {}
+                            }
+                            // Load the struct instance and read the field
+                            methodVisitor.visitVarInsn(ALOAD, tempIndex);
+                            methodVisitor.visitFieldInsn(GETFIELD, internalTypeName, fieldName, fieldDescriptor);
+                            
+                            // Store field in a temp local
+                            int fieldValueIndex = localVarIndex++;
+                            switch (fieldType) {
+                                case INT:
+                                case BOOLEAN:
+                                    methodVisitor.visitVarInsn(ISTORE, fieldValueIndex);
+                                    break;
+                                case LONG:
+                                    methodVisitor.visitVarInsn(LSTORE, fieldValueIndex);
+                                    localVarIndex++; // 64-bit takes 2 slots
+                                    break;
+                                case FLOAT:
+                                case DOUBLE:
+                                    methodVisitor.visitVarInsn(DSTORE, fieldValueIndex);
+                                    localVarIndex++; // 64-bit takes 2 slots
+                                    break;
+                                default:
+                                    methodVisitor.visitVarInsn(ASTORE, fieldValueIndex);
+                                    break;
+                            }
+                            
+                            // Bind or match nested pattern
+                            if (nestedPattern instanceof VariablePattern) {
+                                String varName = ((VariablePattern) nestedPattern).getName();
+                                localVariables.put(varName, fieldValueIndex);
+                                localVariableTypes.put(varName, fieldType);
+                            } else if (nestedPattern instanceof com.firefly.compiler.ast.pattern.LiteralPattern) {
+                                com.firefly.compiler.ast.pattern.LiteralPattern lit = (com.firefly.compiler.ast.pattern.LiteralPattern) nestedPattern;
+                                // Load stored field value with correct opcode
+                                switch (fieldType) {
+                                    case INT:
+                                    case BOOLEAN:
+                                        methodVisitor.visitVarInsn(ILOAD, fieldValueIndex);
+                                        break;
+                                    case LONG:
+                                        methodVisitor.visitVarInsn(LLOAD, fieldValueIndex);
+                                        break;
+                                    case FLOAT:
+                                    case DOUBLE:
+                                        methodVisitor.visitVarInsn(DLOAD, fieldValueIndex);
+                                        break;
+                                    default:
+                                        methodVisitor.visitVarInsn(ALOAD, fieldValueIndex);
+                                        break;
+                                }
+                                // Load literal and compare
+                                lit.getLiteral().accept(this);
+                                if (fieldType == VarType.INT || fieldType == VarType.BOOLEAN) {
+                                    methodVisitor.visitJumpInsn(IF_ICMPNE, failLabel);
+                                } else if (fieldType == VarType.LONG) {
+                                    methodVisitor.visitInsn(LCMP);
+                                    Label ok = new Label();
+                                    methodVisitor.visitJumpInsn(IFEQ, ok);
+                                    methodVisitor.visitJumpInsn(GOTO, failLabel);
+                                    methodVisitor.visitLabel(ok);
+                                } else if (fieldType == VarType.FLOAT || fieldType == VarType.DOUBLE) {
+                                    methodVisitor.visitInsn(DCMPL);
+                                    Label ok = new Label();
+                                    methodVisitor.visitJumpInsn(IFEQ, ok);
+                                    methodVisitor.visitJumpInsn(GOTO, failLabel);
+                                    methodVisitor.visitLabel(ok);
+                                } else {
+                                    methodVisitor.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Object", "equals", "(Ljava/lang/Object;)Z", false);
+                                    methodVisitor.visitJumpInsn(IFEQ, failLabel);
+                                }
+                            } else {
+                                boolean alwaysMatches = generatePatternMatch(
+                                    nestedPattern,
+                                    fieldValueIndex,
+                                    failLabel
+                                );
+                            }
+                        }
+                    }
+                }
+                
+                return false;
+            }
+            
+            // For other patterns, default to always match (fallback)
+            return true;
+        } catch (Exception e) {
+            String loc = (pattern != null && pattern.getLocation() != null) ? (pattern.getLocation().toString()) : "<unknown>";
+            throw new RuntimeException("Pattern codegen failed at " + loc + " (" + pattern.getClass().getSimpleName() + ") - " + e.getMessage(), e);
         }
-        
-        // For other patterns, default to always match (fallback)
-        return true;
     }
     @Override 
     public Void visitBlockExpr(BlockExpr expr) {
@@ -5809,7 +6620,7 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                     methodVisitor.visitInsn(IRETURN);
                     break;
                 case FLOAT:
-                    methodVisitor.visitInsn(FRETURN);
+                    methodVisitor.visitInsn(DRETURN);
                     break;
                 case STRING:
                 case OBJECT:
@@ -5820,6 +6631,8 @@ public class BytecodeGenerator implements AstVisitor<Void> {
             // Bare return
             methodVisitor.visitInsn(RETURN);
         }
+        // Mark following code as unreachable for frame computation
+        codeIsReachable = false;
         
         codeIsReachable = false;  // Code after return is unreachable
         
@@ -6351,13 +7164,56 @@ public class BytecodeGenerator implements AstVisitor<Void> {
     public Void visitAssignmentExpr(AssignmentExpr expr) {
         if (methodVisitor == null) return null;
         
-        // For now, only handle simple identifier assignment
-        if (expr.getTarget() instanceof IdentifierExpr) {
+        // Handle field assignment (this.field = value)
+        if (expr.getTarget() instanceof FieldAccessExpr) {
+            FieldAccessExpr target = (FieldAccessExpr) expr.getTarget();
+            String fieldName = target.getFieldName();
+            
+            // Evaluate object reference (e.g., this)
+            target.getObject().accept(this);
+            
+            // Evaluate the value to assign
+            expr.getValue().accept(this);
+            VarType valueType = lastExpressionType;
+            
+            // Store to field - need to determine field descriptor
+            // For now, assume it's in the current class and use Int as default type
+            String className = this.className;
+            if (currentEnclosingClass != null) {
+                className = currentEnclosingClass;
+            }
+            
+            // Get field descriptor from registered field types
+            String descriptor = currentClassFieldTypes.getOrDefault(fieldName, "Ljava/lang/Object;");
+            
+            // Debug logging
+            if (System.getenv("CODEGEN_DEBUG") != null) {
+                System.err.println("[CODEGEN] Field assignment: " + fieldName + " descriptor=" + descriptor + " valueType=" + valueType);
+            }
+            
+            // Convert value type to field type if needed (e.g., Int -> Double for Float fields)
+            if (valueType == VarType.INT && "D".equals(descriptor)) {
+                methodVisitor.visitInsn(I2D);
+                lastExpressionType = VarType.DOUBLE;
+            } else if (valueType == VarType.INT && "J".equals(descriptor)) {
+                methodVisitor.visitInsn(I2L);
+                lastExpressionType = VarType.LONG;
+            } else if (valueType == VarType.LONG && "D".equals(descriptor)) {
+                methodVisitor.visitInsn(L2D);
+                lastExpressionType = VarType.DOUBLE;
+            }
+            
+            methodVisitor.visitFieldInsn(PUTFIELD, className, fieldName, descriptor);
+            lastCallWasVoid = true;
+        }
+        // Handle simple identifier assignment
+        else if (expr.getTarget() instanceof IdentifierExpr) {
             IdentifierExpr target = (IdentifierExpr) expr.getTarget();
             String varName = target.getName();
             
             // Evaluate the value
             expr.getValue().accept(this);
+            VarType valueType = lastExpressionType;
             
             // Get variable slot
             Integer varIndex = localVariables.get(varName);
@@ -6367,20 +7223,21 @@ public class BytecodeGenerator implements AstVisitor<Void> {
             
             VarType varType = localVariableTypes.getOrDefault(varName, lastExpressionType);
             
-            // Store to variable (assignment doesn't produce a value in statements)
-            switch (varType) {
-                case INT:
-                case BOOLEAN:
-                    methodVisitor.visitVarInsn(ISTORE, varIndex);
-                    break;
-                case FLOAT:
-                    methodVisitor.visitVarInsn(FSTORE, varIndex);
-                    break;
-                case STRING:
-                case OBJECT:
-                    methodVisitor.visitVarInsn(ASTORE, varIndex);
-                    break;
+            // Convert value type to variable type if needed
+            if (valueType == VarType.INT && (varType == VarType.DOUBLE || varType == VarType.FLOAT)) {
+                methodVisitor.visitInsn(I2D);
+                lastExpressionType = VarType.DOUBLE;
+            } else if (valueType == VarType.INT && varType == VarType.LONG) {
+                methodVisitor.visitInsn(I2L);
+                lastExpressionType = VarType.LONG;
+            } else if (valueType == VarType.LONG && (varType == VarType.DOUBLE || varType == VarType.FLOAT)) {
+                methodVisitor.visitInsn(L2D);
+                lastExpressionType = VarType.DOUBLE;
             }
+            
+            // Store to variable (assignment doesn't produce a value in statements)
+            // Use FireflyType system for correct opcode selection
+            methodVisitor.visitVarInsn(getStoreOpcodeForType(varType), varIndex);
             
             lastCallWasVoid = true; // Assignment is void-like in statements
         }
@@ -6422,7 +7279,7 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                     constructorDescriptor.append("I");
                     break;
                 case FLOAT:
-                    constructorDescriptor.append("F");
+                    constructorDescriptor.append("D");
                     break;
                 case BOOLEAN:
                     constructorDescriptor.append("Z");
@@ -6597,11 +7454,17 @@ public class BytecodeGenerator implements AstVisitor<Void> {
      * Get class name from Firefly Type
      */
     private String getClassNameFromType(com.firefly.compiler.ast.type.Type type) {
+        // Normalize: treat GenericType like NamedType using its base name
+        String name = null;
         if (type instanceof com.firefly.compiler.ast.type.NamedType) {
-            com.firefly.compiler.ast.type.NamedType namedType = 
-                (com.firefly.compiler.ast.type.NamedType) type;
-            String name = namedType.getName();
-            
+            name = ((com.firefly.compiler.ast.type.NamedType) type).getName();
+        } else if (type instanceof com.firefly.compiler.ast.type.GenericType) {
+            name = ((com.firefly.compiler.ast.type.GenericType) type).getBaseName();
+        }
+        if (name != null) {
+            // Strip generic arguments if present (e.g., "Option<String>" -> "Option")
+            int lt = name.indexOf('<');
+            if (lt > 0) name = name.substring(0, lt);
             // Check common Java classes
             switch (name) {
                 case "ArrayList": return "java.util.ArrayList";
@@ -6617,7 +7480,7 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                 default:
                     // If it's already qualified, use as-is
                     if (name.contains(".")) return name;
-                    
+
                     // If it's a known struct/spark/data in this unit, qualify with current module package
                     if (structRegistry.containsKey(name)) {
                         String modulePkg = (moduleBasePath != null && !moduleBasePath.isEmpty())
@@ -6625,13 +7488,21 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                             : "";
                         return modulePkg.isEmpty() ? name : modulePkg + "." + name;
                     }
-                    
+
                     // Try to resolve via imports and wildcard imports
                     java.util.Optional<String> resolved = typeResolver.resolveClassName(name);
                     if (resolved.isPresent()) {
                         return resolved.get();
                     }
-                    
+
+                    // Heuristics for stdlib ADTs
+                    if ("Option".equals(name)) {
+                        return "firefly.std.option.Option";
+                    }
+                    if ("Result".equals(name)) {
+                        return "firefly.std.result.Result";
+                    }
+
                     // Fallback: assume it's a local class in current module
                     String modulePkg = (moduleBasePath != null && !moduleBasePath.isEmpty())
                         ? moduleBasePath.replace('/', '.')
@@ -6669,8 +7540,8 @@ public class BytecodeGenerator implements AstVisitor<Void> {
         if (type instanceof com.firefly.compiler.ast.type.PrimitiveType) {
             com.firefly.compiler.ast.type.PrimitiveType primType = 
                 (com.firefly.compiler.ast.type.PrimitiveType) type;
-            String name = primType.getName();
-            switch (name) {
+            String pname = primType.getName();
+            switch (pname) {
                 case "Int": return "I";
                 case "Long": return "J";
                 case "Float": return "D";  // Flylang Float maps to JVM double
@@ -6681,10 +7552,16 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                 case "Void": return "V";  // void
                 default: return "Ljava/lang/Object;";
             }
-        } else if (type instanceof com.firefly.compiler.ast.type.NamedType) {
-            com.firefly.compiler.ast.type.NamedType namedType = 
-                (com.firefly.compiler.ast.type.NamedType) type;
-            String name = namedType.getName();
+        } else if (type instanceof com.firefly.compiler.ast.type.NamedType || type instanceof com.firefly.compiler.ast.type.GenericType) {
+            String name;
+            if (type instanceof com.firefly.compiler.ast.type.NamedType) {
+                name = ((com.firefly.compiler.ast.type.NamedType) type).getName();
+            } else {
+                name = ((com.firefly.compiler.ast.type.GenericType) type).getBaseName();
+            }
+            // Strip generic arguments from Named/Generic simple names if present
+            int lt = name.indexOf('<');
+            if (lt > 0) name = name.substring(0, lt);
             switch (name) {
                 case "Int": return "I";
                 case "Long": return "J";
@@ -6705,6 +7582,13 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                     if (resolved.isPresent()) {
                         return "L" + resolved.get().replace('.', '/') + ";";
                     }
+                    // Heuristics for stdlib ADTs
+                    if ("Option".equals(name)) {
+                        return "Lfirefly/std/option/Option;";
+                    }
+                    if ("Result".equals(name)) {
+                        return "Lfirefly/std/result/Result;";
+                    }
                     // Fallback: assume in current module
                     if (moduleBasePath != null && !moduleBasePath.isEmpty()) {
                         return "L" + moduleBasePath + "/" + name + ";";
@@ -6720,10 +7604,13 @@ public class BytecodeGenerator implements AstVisitor<Void> {
      * Returns null for primitive types.
      */
     private String getTypeNameFromType(com.firefly.compiler.ast.type.Type type) {
+        String name = null;
         if (type instanceof com.firefly.compiler.ast.type.NamedType) {
-            com.firefly.compiler.ast.type.NamedType namedType = 
-                (com.firefly.compiler.ast.type.NamedType) type;
-            String name = namedType.getName();
+            name = ((com.firefly.compiler.ast.type.NamedType) type).getName();
+        } else if (type instanceof com.firefly.compiler.ast.type.GenericType) {
+            name = ((com.firefly.compiler.ast.type.GenericType) type).getBaseName();
+        }
+        if (name != null) {
             // Only return non-primitive type names
             switch (name) {
                 case "Int":
@@ -6749,6 +7636,9 @@ public class BytecodeGenerator implements AstVisitor<Void> {
             com.firefly.compiler.ast.type.PrimitiveType primType = 
                 (com.firefly.compiler.ast.type.PrimitiveType) type;
             String name = primType.getName();
+            // Strip generic arguments if present
+            int lt = name.indexOf('<');
+            if (lt > 0) name = name.substring(0, lt);
             switch (name) {
                 case "Int": return VarType.INT;
                 case "Long": return VarType.LONG;
@@ -6760,10 +7650,12 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                 case "Void": return VarType.OBJECT;  // Unit maps to void, handle specially
                 default: return VarType.OBJECT;
             }
-        } else if (type instanceof com.firefly.compiler.ast.type.NamedType) {
-            com.firefly.compiler.ast.type.NamedType namedType = 
-                (com.firefly.compiler.ast.type.NamedType) type;
-            String name = namedType.getName();
+        } else if (type instanceof com.firefly.compiler.ast.type.NamedType || type instanceof com.firefly.compiler.ast.type.GenericType) {
+            String name = (type instanceof com.firefly.compiler.ast.type.NamedType)
+                ? ((com.firefly.compiler.ast.type.NamedType) type).getName()
+                : ((com.firefly.compiler.ast.type.GenericType) type).getBaseName();
+            int lt2 = name.indexOf('<');
+            if (lt2 > 0) name = name.substring(0, lt2);
             switch (name) {
                 case "Int": return VarType.INT;
                 case "Long": return VarType.LONG;
@@ -7110,18 +8002,28 @@ public class BytecodeGenerator implements AstVisitor<Void> {
             catchStarts.add(new Label());
         }
         
-        // Register exception handlers with ASM
+        // Register catch handlers with ASM
+        // Track if we need to wrap caught Throwable into FlyException
+        java.util.List<Boolean> wrapToFly = new java.util.ArrayList<>();
         // Register catch handlers for try block
         for (int i = 0; i < expr.getCatchClauses().size(); i++) {
             TryExpr.CatchClause catchClause = expr.getCatchClauses().get(i);
             String exceptionType = "java/lang/Throwable";  // Default
+            boolean wrap = false;
             
             if (catchClause.getExceptionType().isPresent()) {
                 // Resolve exception type properly
                 com.firefly.compiler.ast.type.Type type = catchClause.getExceptionType().get();
-                exceptionType = resolveExceptionType(type);
+                String resolved = resolveExceptionType(type);
+                // If catching FlyException, register for Throwable and wrap in handler
+                if ("com/firefly/runtime/exceptions/FlyException".equals(resolved)) {
+                    exceptionType = "java/lang/Throwable";
+                    wrap = true;
+                } else {
+                    exceptionType = resolved;
+                }
             }
-            
+            wrapToFly.add(wrap);
             methodVisitor.visitTryCatchBlock(tryStart, tryEnd, catchStarts.get(i), exceptionType);
         }
         
@@ -7155,15 +8057,36 @@ public class BytecodeGenerator implements AstVisitor<Void> {
             
             methodVisitor.visitLabel(catchStart);
             
-            // Store exception in local variable if named
+            // Always store the caught exception first
+            int caughtVar = localVarIndex++;
+            methodVisitor.visitVarInsn(ASTORE, caughtVar);
+            
+            // Optionally wrap to FlyException if requested
+            // We assume wrapToFly list parallel to catch clauses (constructed above)
+            if (wrapToFly.size() > i && wrapToFly.get(i)) {
+                // if (!(caught instanceof FlyException)) caught = new FlyException(caught)
+                Label isFly = new Label();
+                methodVisitor.visitVarInsn(ALOAD, caughtVar);
+                methodVisitor.visitTypeInsn(INSTANCEOF, "com/firefly/runtime/exceptions/FlyException");
+                methodVisitor.visitJumpInsn(IFNE, isFly);
+                // Construct new FlyException(caught)
+                methodVisitor.visitTypeInsn(NEW, "com/firefly/runtime/exceptions/FlyException");
+                methodVisitor.visitInsn(DUP);
+                methodVisitor.visitVarInsn(ALOAD, caughtVar);
+                methodVisitor.visitMethodInsn(INVOKESPECIAL, "com/firefly/runtime/exceptions/FlyException", "<init>", "(Ljava/lang/Throwable;)V", false);
+                // Store back
+                methodVisitor.visitVarInsn(ASTORE, caughtVar);
+                methodVisitor.visitLabel(isFly);
+            }
+            
+            // Bind to user variable if present, else discard
             if (catchClause.getVariableName().isPresent()) {
                 String varName = catchClause.getVariableName().get();
-                int exceptionVar = localVarIndex++;
-                localVariables.put(varName, exceptionVar);
+                localVariables.put(varName, caughtVar);
                 localVariableTypes.put(varName, VarType.OBJECT);
-                methodVisitor.visitVarInsn(ASTORE, exceptionVar);
             } else {
-                // Pop exception if not used
+                // Not used: pop by loading and POP
+                methodVisitor.visitVarInsn(ALOAD, caughtVar);
                 methodVisitor.visitInsn(POP);
             }
             
@@ -7565,8 +8488,8 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                 mv.visitMethodInsn(INVOKESTATIC, "java/lang/Boolean", "valueOf", 
                     "(Z)Ljava/lang/Boolean;", false);
             } else if (lastExpressionType == VarType.FLOAT) {
-                mv.visitMethodInsn(INVOKESTATIC, "java/lang/Float", "valueOf", 
-                    "(F)Ljava/lang/Float;", false);
+                mv.visitMethodInsn(INVOKESTATIC, "java/lang/Double", "valueOf", 
+                    "(D)Ljava/lang/Double;", false);
             }
             
             // Call equals
@@ -7628,8 +8551,8 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                     paramIndex++;
                     break;
                 case FLOAT:
-                    mv.visitVarInsn(FLOAD, paramIndex);
-                    paramIndex++;
+                    mv.visitVarInsn(DLOAD, paramIndex);
+                    paramIndex += 2; // double takes 2 slots
                     break;
                 case STRING:
                 case STRING_ARRAY:
@@ -7687,7 +8610,7 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                 mv.visitInsn(IRETURN);
                 break;
             case FLOAT:
-                mv.visitInsn(FRETURN);
+                mv.visitInsn(DRETURN);
                 break;
             case STRING:
             case STRING_ARRAY:
@@ -8053,8 +8976,8 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                     paramIndex++;
                     break;
                 case FLOAT:
-                    mv.visitVarInsn(FLOAD, paramIndex);
-                    paramIndex++;
+                    mv.visitVarInsn(DLOAD, paramIndex);
+                    paramIndex += 2; // double takes 2 slots
                     break;
                 case STRING:
                 case STRING_ARRAY:
@@ -8126,7 +9049,7 @@ public class BytecodeGenerator implements AstVisitor<Void> {
                     mv.visitJumpInsn(IF_ICMPNE, notEqual);
                     break;
                 case FLOAT:
-                    mv.visitInsn(FCMPG);
+                    mv.visitInsn(DCMPL);
                     mv.visitJumpInsn(IFNE, notEqual);
                     break;
                 case STRING:
@@ -8977,6 +9900,11 @@ public class BytecodeGenerator implements AstVisitor<Void> {
     private String resolveStructInternalName(String simpleName) {
         StructMetadata meta = structRegistry.get(simpleName);
         if (meta != null) return meta.internalName;
+        // Try resolving as a nested variant class from imports (e.g., Result$Ok)
+        java.util.Optional<String> nested = typeResolver.resolveVariantNestedClass(simpleName);
+        if (nested.isPresent()) {
+            return nested.get().replace('.', '/');
+        }
         if (moduleBasePath != null && !moduleBasePath.isEmpty()) {
             return moduleBasePath + "/" + simpleName;
         }

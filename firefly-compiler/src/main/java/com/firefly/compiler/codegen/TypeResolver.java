@@ -1,5 +1,6 @@
 package com.firefly.compiler.codegen;
 
+import com.firefly.compiler.types.FireflyType;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.HashMap;
@@ -156,7 +157,14 @@ public class TypeResolver {
     }
     
     public Optional<String> resolveClassName(String simpleName) {
-        // 1. Check explicit imports first
+        // 0. Check Firefly native types first (highest priority)
+        FireflyType fireflyType = FireflyType.fromFireflyName(simpleName);
+        if (fireflyType != null && fireflyType.getJvmInternalName() != null) {
+            // Return the JVM internal name as a dotted class name
+            return Optional.of(fireflyType.getJvmInternalName().replace('/', '.'));
+        }
+        
+        // 1. Check explicit imports
         if (importedTypes.containsKey(simpleName)) {
             return Optional.of(importedTypes.get(simpleName));
         }
@@ -192,6 +200,35 @@ public class TypeResolver {
         }
 
         // 6. Could not resolve - this means missing import!
+        return Optional.empty();
+    }
+    
+    /**
+     * Attempt to resolve a nested variant class (e.g., Result$Ok) given the variant simple name.
+     * This tries all explicitly imported types as potential outers.
+     */
+    public Optional<String> resolveVariantNestedClass(String variantSimpleName) {
+        // Prefer explicitly imported types as potential outers
+        for (String outerFqcn : importedTypes.values()) {
+            String candidate = outerFqcn + "$" + variantSimpleName;
+            if (tryLoadClass(candidate)) {
+                return Optional.of(candidate);
+            }
+        }
+        
+        // Canonical mapping for stdlib ADTs without requiring classloader
+        if ("Some".equals(variantSimpleName) || "None".equals(variantSimpleName)) {
+            return Optional.of("firefly.std.option.Option$" + variantSimpleName);
+        }
+        if ("Ok".equals(variantSimpleName) || "Err".equals(variantSimpleName)) {
+            return Optional.of("firefly.std.result.Result$" + variantSimpleName);
+        }
+        
+        // Also try current module package if available (Outer$Variant)
+        if (currentModulePackage != null && !currentModulePackage.isEmpty()) {
+            String candidate = currentModulePackage + "." + variantSimpleName;
+            return Optional.of(candidate);
+        }
         return Optional.empty();
     }
     
