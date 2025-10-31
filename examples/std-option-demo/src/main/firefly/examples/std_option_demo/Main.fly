@@ -1,0 +1,25 @@
+module examples::std_option_demo
+
+use firefly::std::option::{Option, Some, None, map, unwrapOr, isSome}
+
+class Main {
+  pub fn fly(args: [String]) -> Void {
+    println("-- std-option-demo --");
+
+    let maybeName: Option<String> = Some("Alice");
+    let upper: Option<String> = map(maybeName, lambda(s) -> s.toUpperCase());
+    println(self::show(upper));
+
+    let noneName: Option<String> = None;
+    println("unwrapOr(None, 'guest') = " + unwrapOr(noneName, "guest"));
+
+    println("isSome(Some) = " + isSome(maybeName));
+  }
+
+  pub fn show(opt: Option<String>) -> String {
+    match opt {
+      Some(v) => { return "Some(" + v + ")"; },
+      _ => { return "None"; }
+    }
+  }
+}

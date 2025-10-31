@@ -1,0 +1,39 @@
+module examples::std_result_demo
+
+use firefly::std::result::{Result, Ok, Err, map, flatMap, unwrapOr, fold}
+use java::lang::Integer
+
+class Main {
+  pub fn fly(args: [String]) -> Void {
+    println("-- std-result-demo --");
+
+    let r1: Result<Int, String> = self::parseInt("21");
+    let r2: Result<Int, String> = self::parseInt("oops");
+
+  // Map Ok value
+  let r1_doubled: Result<Int, String> = map(r1, lambda(x) -> x * 2);
+  println(self::show(r1_doubled));
+
+  // Flat map chain
+  let chain: Result<Int, String> = flatMap(Main::parseInt("10"), lambda(x) -> Main::parseInt("5"));
+  println(self::show(chain));
+
+    // Defaulting
+    println("unwrapOr(oops, 0) = " + unwrapOr(r2, 0));
+  }
+
+  pub static fn parseInt(s: String) -> Result<Int, String> {
+    if (s.matches("^[0-9]+$")) {
+      Result::Ok(Integer::parseInt(s))
+    } else {
+      Result::Err("not a number: " + s)
+    }
+  }
+
+  pub fn show(r: Result<Int, String>) -> String {
+    match r {
+      Ok(v) => { return "Ok(" + v + ")"; },
+      Err(e) => { return "Err(" + e + ")"; }
+    }
+  }
+}

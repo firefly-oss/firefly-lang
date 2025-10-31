@@ -1,0 +1,29 @@
+module examples::exceptions_demo
+
+use java::io::FileInputStream
+use java::io::File
+use com::firefly::runtime::exceptions::FlyException
+
+// Custom Fly exception type
+exception AppError extends FlyException {}
+
+class Main {
+  pub fn fly(args: [String]) -> Void {
+    println("-- exceptions-demo --");
+
+    // 1) Java exception automatically wrapped to FlyException when caught as FlyException
+    try {
+      let s = new FileInputStream(new File("/definitely/not/here.txt"));
+      println(s);
+    } catch (e: FlyException) {
+      println("Caught FlyException: " + e::toString());
+    };
+
+    // 2) Throw and catch a custom Fly exception
+    try {
+      throw new AppError();
+    } catch (e: AppError) {
+      println("Caught AppError!");
+    };
+  }
+}

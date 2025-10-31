@@ -1,0 +1,16 @@
+module examples::ranges_demo
+
+class Main {
+  pub fn fly(args: [String]) -> Void {
+    let score: Int = 85;
+    let grade: String = match score {
+      0..60    => "F",
+      60..70   => "D",
+      70..80   => "C",
+      80..90   => "B",
+      90..=100 => "A",
+      _        => "out"
+    };
+    println(grade);
+  }
+}

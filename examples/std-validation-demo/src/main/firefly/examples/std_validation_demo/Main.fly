@@ -1,0 +1,22 @@
+module examples::std_validation_demo
+
+use firefly::std::validation::{notEmpty, email, all}
+use firefly::std::result::{Result, Ok, Err, isOk, toError}
+use firefly::std::option::{Option, Some, None, unwrapOr}
+
+class Main {
+  pub fn fly(args: [String]) -> Void {
+    println("-- std-validation-demo --");
+
+    let username: String = "bob";
+    let mail: String = "bob@example.com";
+
+    let r1: Result = notEmpty(username);
+    let r2: Result = email(mail);
+
+    // Combine validations
+    let combined: Result = all([r1, r2]);
+
+    println("validations executed");
+  }
+}
