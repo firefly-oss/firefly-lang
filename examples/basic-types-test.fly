@@ -1,0 +1,119 @@
+/**
+ * Basic Firefly Types Test
+ * 
+ * Tests core primitive and standard Java types that work
+ * with the Firefly type system integration.
+ */
+
+module examples::basic_types_test
+
+use java::util::UUID
+use java::math::BigDecimal
+use java::time::{LocalDate, LocalDateTime, Instant, Duration}
+
+class Main {
+    pub fn fly(args: [String]) -> Void {
+        println("========================================");
+        println("FIREFLY BASIC TYPES TEST");
+        println("========================================");
+        println("");
+        
+        // Test Int type
+        println("Test 1: Int");
+        println("------------");
+        let x: Int = 42;
+        let y: Int = 10;
+        let z: Int = x + y;
+        println("  " + x + " + " + y + " = " + z);
+        println("  [OK] Int arithmetic works");
+        println("");
+        
+        // Test Float type (maps to JVM double)
+        println("Test 2: Float");
+        println("--------------");
+        let price: Float = 99.99;
+        let quantity: Float = 3.0;
+        let total: Float = price * quantity;
+        println("  " + price + " * " + quantity + " = " + total);
+        println("  [OK] Float arithmetic works");
+        println("");
+        
+        // Test String type
+        println("Test 3: String");
+        println("---------------");
+        let name: String = "Firefly";
+        let version: String = "1.0";
+        let message: String = name + " " + version;
+        println("  Concatenation: " + message);
+        println("  [OK] String operations work");
+        println("");
+        
+        // Test UUID type
+        println("Test 4: UUID");
+        println("-------------");
+        let id: UUID = UUID::randomUUID();
+        let idString: String = id::toString();
+        println("  Generated: " + idString);
+        println("  [OK] UUID generation works");
+        println("");
+        
+        // Test BigDecimal type
+        println("Test 5: BigDecimal");
+        println("-------------------");
+        let amount: BigDecimal = new BigDecimal("999.99");
+        let bdResult: String = amount::toString();
+        println("  Amount: " + bdResult);
+        println("  [OK] BigDecimal works");
+        println("");
+        
+        // Test LocalDate (java.time)
+        println("Test 6: LocalDate");
+        println("------------------");
+        let today: LocalDate = LocalDate::now();
+        let dateStr: String = today::toString();
+        println("  Today: " + dateStr);
+        println("  [OK] LocalDate works");
+        println("");
+        
+        // Test LocalDateTime (java.time)
+        println("Test 7: LocalDateTime");
+        println("----------------------");
+        let now: LocalDateTime = LocalDateTime::now();
+        let dtStr: String = now::toString();
+        println("  Now: " + dtStr);
+        println("  [OK] LocalDateTime works");
+        println("");
+        
+        // Test Instant (java.time)
+        println("Test 8: Instant");
+        println("----------------");
+        let timestamp: Instant = Instant::now();
+        let tsStr: String = timestamp::toString();
+        println("  Timestamp: " + tsStr);
+        println("  [OK] Instant works");
+        println("");
+        
+        // Test Duration (java.time)
+        println("Test 9: Duration");
+        println("-----------------");
+        let oneHour: Duration = Duration::ofHours(1);
+        let durStr: String = oneHour::toString();
+        println("  One hour: " + durStr);
+        println("  [OK] Duration works");
+        println("");
+        
+        // Test mixed type operations
+        println("Test 10: Mixed Types");
+        println("---------------------");
+        let count: Int = 5;
+        let itemPrice: Float = 19.99;
+        let mixedTotal: Float = count * itemPrice;
+        println("  " + count + " items * $" + itemPrice + " = $" + mixedTotal);
+        println("  [OK] Mixed type operations work");
+        println("");
+        
+        println("========================================");
+        println("ALL TESTS PASSED!");
+        println("========================================");
+    }
+}

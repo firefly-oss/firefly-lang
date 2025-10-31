@@ -1,0 +1,217 @@
+/**
+ * Comprehensive Test for Firefly Native Types
+ * 
+ * Tests that all native Firefly types work correctly:
+ * - Primitives (Int, Long, Float, String)
+ * - Date/Time types (Date, DateTime, Instant, Duration)
+ * - Collections (List, Map, Set)
+ * - Other standard types (UUID, BigDecimal)
+ */
+
+module examples::native_types_test
+
+use firefly::std::time::{Date, DateTime, Instant, Duration}
+use java::util::{UUID, ArrayList, HashMap}
+use java::math::BigDecimal
+
+/**
+ * Test primitive types
+ */
+fn testPrimitives() -> String {
+    // Int
+    let count: Int = 42
+    let doubled: Int = count * 2
+    
+    // Float
+    let price: Float = 99.99
+    let total: Float = price * 1.21
+    
+    // Long
+    let bigNumber: Long = 9999999999
+    
+    // String
+    let name: String = "Firefly"
+    let greeting: String = "Hello, " + name + "!"
+    
+    // Bool
+    let isValid: Bool = true
+    
+    return "Primitives: " + greeting + " count=" + count + " price=" + price;
+}
+
+/**
+ * Test Date type
+ */
+fn testDate() -> String {
+    let today: Date = Date.now()
+    let birthday: Date = Date.of(1990, 5, 15)
+    let nextWeek: Date = today.plusDays(7)
+    
+    let year: Int = birthday.year()
+    let month: Int = birthday.month()
+    let day: Int = birthday.day()
+    
+    return "Date: " + year + "-" + month + "-" + day + " today=" + today.toString();
+}
+
+/**
+ * Test DateTime type
+ */
+fn testDateTime() -> String {
+    let now: DateTime = DateTime.now()
+    let meeting: DateTime = DateTime.of(2025, 10, 31, 14, 30, 0)
+    let later: DateTime = now.plusHours(2)
+    
+    let hour: Int = meeting.hour()
+    let minute: Int = meeting.minute()
+    
+    return "DateTime: " + hour + ":" + minute + " now=" + now.toString();
+}
+
+/**
+ * Test Instant type
+ */
+fn testInstant() -> String {
+    let timestamp: Instant = Instant.now()
+    let epoch: Instant = Instant.ofEpochSecond(0)
+    let inOneHour: Instant = timestamp.plusSeconds(3600)
+    
+    let epochSeconds: Long = timestamp.toEpochSecond()
+    
+    return "Instant: epoch=" + epochSeconds + " timestamp=" + timestamp.toString();
+}
+
+/**
+ * Test Duration type
+ */
+fn testDuration() -> String {
+    let oneHour: Duration = Duration.ofHours(1)
+    let fiveMinutes: Duration = Duration.ofMinutes(5)
+    let total: Duration = oneHour.plus(fiveMinutes)
+    
+    let seconds: Long = total.toSeconds()
+    let isZero: Bool = total.isZero()
+    
+    return "Duration: " + seconds + "s zero=" + isZero + " duration=" + total.toString();
+}
+
+/**
+ * Test UUID type
+ */
+fn testUUID() -> String {
+    let id: UUID = UUID.randomUUID()
+    let parsed: UUID = UUID.fromString("550e8400-e29b-41d4-a716-446655440000")
+    
+    return "UUID: " + id.toString();
+}
+
+/**
+ * Test BigDecimal type
+ */
+fn testBigDecimal() -> String {
+    let amount: BigDecimal = new BigDecimal("99999.99")
+    let vat: BigDecimal = new BigDecimal("0.21")
+    let total: BigDecimal = amount.multiply(vat)
+    
+    return "BigDecimal: " + amount.toString() + " * " + vat.toString() + " = " + total.toString();
+}
+
+/**
+ * Test ArrayList type
+ */
+fn testArrayList() -> String {
+    let numbers: ArrayList = new ArrayList()
+    numbers.add(1)
+    numbers.add(2)
+    numbers.add(3)
+    
+    let size: Int = numbers.size()
+    let first: Object = numbers.get(0)
+    
+    return "ArrayList: size=" + size + " first=" + first.toString();
+}
+
+/**
+ * Test HashMap type
+ */
+fn testHashMap() -> String {
+    let map: HashMap = new HashMap()
+    map.put("name", "Firefly")
+    map.put("version", "1.0")
+    
+    let name: Object = map.get("name")
+    let size: Int = map.size()
+    
+    return "HashMap: size=" + size + " name=" + name.toString();
+}
+
+/**
+ * Test mixed operations
+ */
+fn testMixedOperations() -> String {
+    // Mix primitives
+    let x: Int = 10
+    let y: Float = 3.14
+    let z: Float = x + y
+    
+    // Mix date types
+    let date: Date = Date.now()
+    let datetime: DateTime = DateTime.now()
+    
+    // Mix with strings
+    let message: String = "Value: " + z + " Date: " + date.toString()
+    
+    return message;
+}
+
+/**
+ * Main test runner
+ */
+fn main() -> Int {
+    println("=== FIREFLY NATIVE TYPES TEST ===")
+    println("")
+    
+    println("1. Testing Primitives...")
+    println(testPrimitives())
+    println("")
+    
+    println("2. Testing Date...")
+    println(testDate())
+    println("")
+    
+    println("3. Testing DateTime...")
+    println(testDateTime())
+    println("")
+    
+    println("4. Testing Instant...")
+    println(testInstant())
+    println("")
+    
+    println("5. Testing Duration...")
+    println(testDuration())
+    println("")
+    
+    println("6. Testing UUID...")
+    println(testUUID())
+    println("")
+    
+    println("7. Testing BigDecimal...")
+    println(testBigDecimal())
+    println("")
+    
+    println("8. Testing ArrayList...")
+    println(testArrayList())
+    println("")
+    
+    println("9. Testing HashMap...")
+    println(testHashMap())
+    println("")
+    
+    println("10. Testing Mixed Operations...")
+    println(testMixedOperations())
+    println("")
+    
+    println("=== ALL TESTS COMPLETED ===")
+    
+    return 0;
+}

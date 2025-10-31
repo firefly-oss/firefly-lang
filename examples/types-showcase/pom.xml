@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.firefly</groupId>
+        <artifactId>firefly-examples</artifactId>
+        <version>1.0-Alpha</version>
+    </parent>
+
+    <artifactId>types-showcase</artifactId>
+    <packaging>jar</packaging>
+
+    <name>Firefly Type System Showcase</name>
+    <description>Comprehensive demonstration of Firefly's native type system</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.firefly</groupId>
+            <artifactId>firefly-stdlib</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>compile-firefly</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>java</goal>
+                        </goals>
+                        <configuration>
+                            <mainClass>com.firefly.compiler.FireflyCompiler</mainClass>
+                            <arguments>
+                                <argument>${project.basedir}/src/main/firefly</argument>
+                                <argument>-o</argument>
+                                <argument>${project.build.directory}/classes</argument>
+                            </arguments>
+                            <classpathScope>compile</classpathScope>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>run-example</id>
+                        <goals>
+                            <goal>java</goal>
+                        </goals>
+                        <configuration>
+                            <mainClass>examples.types_showcase.Main</mainClass>
+                            <classpathScope>runtime</classpathScope>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -1,0 +1,46 @@
+// Simple test for REPL - testing native Firefly types
+// Run this line by line in the REPL
+
+// Test 1: Primitives
+let x: Int = 42
+x
+let price: Float = 99.99
+price
+let name: String = "Firefly"
+name
+
+// Test 2: Type inference
+let auto = 3.14
+auto
+let message = "Hello from Firefly"
+message
+
+// Test 3: Arithmetic with types
+let a: Int = 10
+let b: Int = 20
+a + b
+let f1: Float = 3.14
+let f2: Float = 2.0
+f1 * f2
+
+// Test 4: String concatenation
+let greeting = "Hello, " + name
+greeting
+
+// Test 5: UUID (requires import)
+// use java::util::UUID
+// let id: UUID = UUID.randomUUID()
+// id.toString()
+
+// Test 6: Date types (requires Firefly stdlib to be compiled)
+// use firefly::std::time::Date
+// let today = Date.now()
+// today.toString()
+
+// Test 7: Type system checks
+let typed: Int = 100
+typed
+let floatVal: Float = 2.5
+floatVal
+let stringVal: String = "test"
+stringVal

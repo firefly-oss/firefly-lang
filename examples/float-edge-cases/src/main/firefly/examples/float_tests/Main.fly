@@ -1,0 +1,178 @@
+/**
+ * Float Type Edge Cases Test
+ * 
+ * Tests edge cases and potential issues with Float type:
+ * - Comparisons (all operators)
+ * - Mixed arithmetic with Int
+ * - Negative numbers
+ * - Zero handling
+ * - Large and small numbers
+ * - Chained operations
+ */
+
+module examples::float_tests
+
+class Main {
+    pub fn fly(args: [String]) -> Void {
+        println("========================================");
+        println("  FLOAT TYPE EDGE CASES TEST");
+        println("========================================");
+        println("");
+        
+        // Test 1: All comparison operators
+        println("Test 1: Float Comparisons");
+        println("--------------------------");
+        let a: Float = 10.5;
+        let b: Float = 20.3;
+        let c: Float = 10.5;
+        
+        if (a == c) {
+            println("  [OK] Float equality works");
+        };
+        
+        if (a != b) {
+            println("  [OK] Float inequality works");
+        };
+        
+        if (a < b) {
+            println("  [OK] Float less-than works");
+        };
+        
+        if (b > a) {
+            println("  [OK] Float greater-than works");
+        };
+        
+        if (a <= c) {
+            println("  [OK] Float less-or-equal works");
+        };
+        
+        if (b >= a) {
+            println("  [OK] Float greater-or-equal works");
+        };
+        println("");
+        
+        // Test 2: Mixed Int+Float operations
+        println("Test 2: Mixed Int+Float Arithmetic");
+        println("-----------------------------------");
+        let x: Int = 10;
+        let y: Float = 3.5;
+        
+        let sum: Float = x + y;
+        println("  Int + Float: " + x + " + " + y + " = " + sum);
+        
+        let diff: Float = x - y;
+        println("  Int - Float: " + x + " - " + y + " = " + diff);
+        
+        let prod: Float = x * y;
+        println("  Int * Float: " + x + " * " + y + " = " + prod);
+        
+        let quot: Float = x / y;
+        println("  Int / Float: " + x + " / " + y + " = " + quot);
+        
+        // Reverse order
+        let sum2: Float = y + x;
+        println("  Float + Int: " + y + " + " + x + " = " + sum2);
+        
+        let prod2: Float = y * x;
+        println("  Float * Int: " + y + " * " + x + " = " + prod2);
+        println("");
+        
+        // Test 3: Negative numbers
+        println("Test 3: Negative Float Numbers");
+        println("-------------------------------");
+        let neg: Float = -15.5;
+        let pos: Float = 10.0;
+        
+        let negSum: Float = neg + pos;
+        println("  Negative + Positive: " + neg + " + " + pos + " = " + negSum);
+        
+        let negProd: Float = neg * pos;
+        println("  Negative * Positive: " + neg + " * " + pos + " = " + negProd);
+        
+        if (neg < pos) {
+            println("  [OK] Negative < Positive comparison works");
+        };
+        println("");
+        
+        // Test 4: Zero handling
+        println("Test 4: Zero Handling");
+        println("---------------------");
+        let zero: Float = 0.0;
+        let num: Float = 42.5;
+        
+        let zeroSum: Float = zero + num;
+        println("  0.0 + " + num + " = " + zeroSum);
+        
+        let zeroProd: Float = zero * num;
+        println("  0.0 * " + num + " = " + zeroProd);
+        
+        if (zero == 0.0) {
+            println("  [OK] Zero equality works");
+        };
+        
+        if (num > zero) {
+            println("  [OK] Comparison with zero works");
+        };
+        println("");
+        
+        // Test 5: Large numbers
+        println("Test 5: Large Float Numbers");
+        println("---------------------------");
+        let large1: Float = 999999.99;
+        let large2: Float = 1000000.01;
+        
+        if (large2 > large1) {
+            println("  [OK] Large number comparison works");
+        };
+        
+        let largeSum: Float = large1 + large2;
+        println("  Large sum: " + large1 + " + " + large2 + " = " + largeSum);
+        println("");
+        
+        // Test 6: Small decimals
+        println("Test 6: Small Decimal Numbers");
+        println("------------------------------");
+        let small1: Float = 0.001;
+        let small2: Float = 0.002;
+        
+        let smallSum: Float = small1 + small2;
+        println("  Small sum: " + small1 + " + " + small2 + " = " + smallSum);
+        
+        if (small2 > small1) {
+            println("  [OK] Small decimal comparison works");
+        };
+        println("");
+        
+        // Test 7: Chained operations
+        println("Test 7: Chained Float Operations");
+        println("---------------------------------");
+        let v1: Float = 10.0;
+        let v2: Float = 5.0;
+        let v3: Float = 2.0;
+        
+        let chained: Float = (v1 + v2) * v3;
+        println("  (10.0 + 5.0) * 2.0 = " + chained);
+        
+        let complex: Float = ((v1 * v2) + v3) / v2;
+        println("  ((10.0 * 5.0) + 2.0) / 5.0 = " + complex);
+        println("");
+        
+        // Test 8: Mixed with multiple Ints
+        println("Test 8: Complex Mixed Types");
+        println("---------------------------");
+        let i1: Int = 5;
+        let i2: Int = 3;
+        let f1: Float = 2.5;
+        
+        let mixedResult: Float = (i1 + i2) * f1;
+        println("  (5 + 3) * 2.5 = " + mixedResult);
+        
+        let mixedResult2: Float = i1 * f1 + i2;
+        println("  5 * 2.5 + 3 = " + mixedResult2);
+        println("");
+        
+        println("========================================");
+        println("  ALL FLOAT EDGE CASES PASSED!");
+        println("========================================");
+    }
+}

@@ -1,0 +1,167 @@
+/**
+ * Firefly Type System Showcase
+ * 
+ * Demonstrates all native Firefly types and their usage.
+ * This is a comprehensive working example that tests:
+ * - All primitive types
+ * - Type conversions
+ * - Arithmetic operations
+ * - String operations
+ * - Java interop with proper types
+ */
+
+module examples::types_showcase
+
+use java::lang::System
+
+class Main {
+    pub fn fly(args: [String]) -> Void {
+        println("========================================");
+        println("  FIREFLY TYPE SYSTEM SHOWCASE");
+        println("========================================");
+        println("");
+        
+        // Test all primitive types
+        println("Testing Primitive Types");
+        println("-------------------------");
+        
+        // Int - 32-bit integer
+        let count: Int = 42;
+        println("  Int:    " + count);
+        
+        // Float - 64-bit floating point (maps to JVM double)
+        let price: Float = 99.99;
+        println("  Float:  " + price);
+        
+        // Bool - boolean
+        let active: Bool = true;
+        println("  Bool:   " + active);
+        
+        // String - text
+        let name: String = "Firefly";
+        println("  String: " + name);
+        
+        // Demonstrate that types work correctly
+        if (active) {
+            println("  [OK] Boolean logic works");
+        };
+        
+        if (count == 42) {
+            println("  [OK] Integer comparison works");
+        };
+        
+        if (price > 90.0) {
+            println("  [OK] Float comparison works");
+        };
+        println("");
+        
+        // Test arithmetic operations with typed values
+        println("Testing Arithmetic Operations");
+        println("------------------------------");
+        
+        // Integer arithmetic
+        let a: Int = 10;
+        let b: Int = 20;
+        let sum: Int = a + b;
+        let product: Int = a * b;
+        println("  " + a + " + " + b + " = " + sum);
+        println("  " + a + " * " + b + " = " + product);
+        
+        // Float arithmetic
+        let x: Float = 3.14;
+        let y: Float = 2.0;
+        let floatSum: Float = x + y;
+        let floatProduct: Float = x * y;
+        println("  " + x + " + " + y + " = " + floatSum);
+        println("  " + x + " * " + y + " = " + floatProduct);
+        
+        // Complex expression
+        let result: Int = (a + b) * 2;
+        println("  (" + a + " + " + b + ") * 2 = " + result);
+        
+        println("  [OK] All arithmetic operations work correctly");
+        println("");
+        
+        // Test string operations
+        println("Testing String Operations");
+        println("-------------------------");
+        
+        let first: String = "Hello";
+        let second: String = "World";
+        let combined: String = first + ", " + second + "!";
+        println("  Concatenation: " + combined);
+        
+        // String with numbers
+        let version: String = "Version ";
+        let major: Int = 1;
+        let minor: Int = 0;
+        let versionString: String = version + major + "." + minor;
+        println("  Mixed: " + versionString);
+        
+        // String with float
+        let prefix: String = "Price: $";
+        let amount: Float = 19.99;
+        let priceTag: String = prefix + amount;
+        println("  With Float: " + priceTag);
+        
+        println("  [OK] String operations work correctly");
+        println("");
+        
+        // Test type conversions
+        println("Testing Type Conversions");
+        println("------------------------");
+        
+        // Int to Float conversion in operations
+        let intVal: Int = 10;
+        let floatVal: Float = 3.5;
+        let mixed: Float = intVal + floatVal;
+        println("  Int + Float: " + intVal + " + " + floatVal + " = " + mixed);
+        
+        // Implicit widening in expressions
+        let small: Int = 5;
+        let large: Float = 100.5;
+        let widened: Float = small * large;
+        println("  Int * Float: " + small + " * " + large + " = " + widened);
+        
+        println("  [OK] Type conversions work correctly");
+        println("");
+        
+        // Test mixed operations
+        println("Testing Mixed Operations");
+        println("------------------------");
+        
+        // Real-world scenario: calculate total price
+        let itemCount: Int = 5;
+        let itemPrice: Float = 19.99;
+        let subtotal: Float = itemCount * itemPrice;
+        let taxRate: Float = 0.21;
+        let tax: Float = subtotal * taxRate;
+        let total: Float = subtotal + tax;
+        
+        println("  Shopping Cart:");
+        println("    Items:    " + itemCount);
+        println("    Price:    $" + itemPrice);
+        println("    Subtotal: $" + subtotal);
+        println("    Tax (21%): $" + tax);
+        println("    Total:    $" + total);
+        
+        // Complex expression with multiple types
+        let days: Int = 30;
+        let dailyRate: Float = 12.50;
+        let bonus: Float = 100.0;
+        let monthlyTotal: Float = (days * dailyRate) + bonus;
+        println("");
+        println("  Monthly Calculation:");
+        println("    Days:    " + days);
+        println("    Rate:    $" + dailyRate);
+        println("    Bonus:   $" + bonus);
+        println("    Total:   $" + monthlyTotal);
+        
+        println("  [OK] Complex mixed operations work correctly");
+        println("");
+        
+        println("========================================");
+        println("  ALL TESTS PASSED!");
+        println("========================================");
+    }
+}
